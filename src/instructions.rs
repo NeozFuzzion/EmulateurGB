@@ -63,7 +63,7 @@ impl CPU {
     self.registers.f.carry = did_overflow;
     // Half Carry is set if adding the lower nibbles of the value and register A
     // together result in a value bigger than 0xF. If the result is larger than 0xF
-    // than the addition caused a carry from the lower nibble to the upper nibble.
+    // than the addition caused a carry from the lower nibble to the upper nibble. 
     self.registers.f.half_carry = (self.registers.a & 0xF) + (value & 0xF) > 0xF;
     new_value   
   }

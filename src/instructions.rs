@@ -13,6 +13,18 @@ impl MemoryBus {
     fn read_byte(&self, address: u16) -> u8 {
         self.memory[address as usize]
     }
+
+    /*fn write_byte(&self, addr: u16, byte: u8) {
+        self.memory[address as usize]=byte
+    }*/
+
+    fn read_word(&self, address: u16) -> u16 {
+        u16::from(self.read_byte(addr)) | (u16::from(self.read_byte(addr + 1)) << 8)
+    }
+
+    //fn write_word(&self, addr: u16, byte: u16) {
+      //  self.memory[address as usize]=byte
+    //}
 }
 
 enum JumpTest {
@@ -69,7 +81,7 @@ enum Instruction {
 }
 
 enum ArithmeticTarget {
-    A, B, C, D, E, H, L, HL, AF, BC, DE, SP,
+    A, B, C, D, E, H, L, HL, AF, BC, DE, SP, HLI, D8
 }
 
 enum StackTarget {AF, HL , BC, DE }
@@ -686,6 +698,18 @@ impl Instruction {
 }
 impl CPU {
 
+    fn read_next_byte(&self) -> u8 {
+        let byte = self.bus.read_byte(self.pc);
+        self.registers.pc += 1;
+        byte
+    }
+
+    fn read_next_word(&self) -> u16 {
+        let word = self.bus.read_word(self.pc);
+        self.pc += 2;
+        word
+    }
+
     fn execute(&mut self, instruction: Instruction) {
         match instruction {
             Instruction::ADD(target) => {
@@ -725,8 +749,18 @@ impl CPU {
                         let new_value = self.add(value);
                         self.registers.a = new_value;
                     }
+                    ArithmeticTarget::HLI => {
+                        let value = self.bus.read_byte(self.registers.get_hl());
+                        let new_value = self.add(value);
+                        self.registers.a = new_value;
+                    }
+                    ArithmeticTarget::D8 => {
+                        let value = self.read_next_byte();
+                        let new_value = self.add(value);
+                        self.registers.a = new_value;
+                    }
                     _ => todo!()
-                    //TODO HL d8
+
                 }
             }
 
@@ -749,10 +783,30 @@ impl CPU {
             Instruction::INC(target) => {
                 match target {
                     ArithmeticTarget::A | ArithmeticTarget::B | ArithmeticTarget::C | ArithmeticTarget::D
-                    | ArithmeticTarget::E | ArithmeticTarget::H | ArithmeticTarget::L => {
+                    | ArithmeticTarget::E | ArithmeticTarget::H | ArithmeticTarget::L | ArithmeticTarget::HLI => {
                         self.execute_inc(target);
                     }
-                    // TODO HL
+                    //pas de modifications de flag
+                    ArithmeticTarget::BC => {
+                        let value = self.registers.get_bc();
+                        let new_value = value.wrapping_add(1);
+                        self.registers.set_bc() = new_value;
+                    }
+                    ArithmeticTarget::DE => {
+                        let value = self.registers.get_de();
+                        let new_value = value.wrapping_add(1);
+                        self.registers.set_de() = new_value;
+                    }
+                    ArithmeticTarget::HL => {
+                        let value = self.registers.get_hl();
+                        let new_value = value.wrapping_add(1);
+                        self.registers.set_hl() = new_value;
+                    }
+                    ArithmeticTarget::SP => {
+                        let value = self.sp;
+                        let new_value = value.wrapping_add(1);
+                        self.sp = new_value;
+                    }
                     _ => todo!()
                 }
             },
@@ -760,10 +814,30 @@ impl CPU {
             Instruction::DEC(target) => {
                 match target {
                     ArithmeticTarget::A | ArithmeticTarget::B | ArithmeticTarget::C | ArithmeticTarget::D
-                    | ArithmeticTarget::E | ArithmeticTarget::H | ArithmeticTarget::L => {
+                    | ArithmeticTarget::E | ArithmeticTarget::H | ArithmeticTarget::L | ArithmeticTarget::HLI => {
                         self.execute_dec(target);
                     }
-                    // TODO HL
+                    //pas de modifications de flag
+                    ArithmeticTarget::BC => {
+                        let value = self.registers.get_bc();
+                        let new_value = value.wrapping_sub(1);
+                        self.registers.set_bc() = new_value;
+                    }
+                    ArithmeticTarget::DE => {
+                        let value = self.registers.get_de();
+                        let new_value = value.wrapping_sub(1);
+                        self.registers.set_de() = new_value;
+                    }
+                    ArithmeticTarget::HL => {
+                        let value = self.registers.get_hl();
+                        let new_value = value.wrapping_sub(1);
+                        self.registers.set_hl() = new_value;
+                    }
+                    ArithmeticTarget::SP => {
+                        let value = self.sp;
+                        let new_value = value.wrapping_sub(1);
+                        self.sp = new_value;
+                    }
                     _ => todo!()
                 }
             },
@@ -966,7 +1040,8 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            // TODO HL d8
+            ArithmeticTarget::HLI => self.bus.read_byte(self.registers.get_hl()),
+            ArithmeticTarget::D8 => self.read_next_byte(),
         };
 
         let carry = if self.registers.f.carry { 1 } else { 0 };
@@ -993,9 +1068,10 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HLI => self.bus.read_byte(self.registers.get_hl()),
+            ArithmeticTarget::D8 => self.read_next_byte(),
             _ => todo!(),
 
-            // TODO HL d8
         };
         let (new_value, did_overflow) = self.registers.a.overflowing_sub(value);
 
@@ -1016,9 +1092,10 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HLI => self.bus.read_byte(self.registers.get_hl()),
+            ArithmeticTarget::D8 => self.read_next_byte(),
             _ => todo!(),
 
-            // TODO HL d8
         };
 
         let carry_bit = if self.registers.f.carry { 1 } else { 0 }; // Get the carry flag as a 0 or 1.
@@ -1044,9 +1121,10 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HLI => self.bus.read_byte(self.registers.get_hl()),
+            ArithmeticTarget::D8 => self.read_next_byte(),
             _ => todo!(),
 
-            // TODO HL d8
         };
         let result = self.registers.a & value;
 
@@ -1067,9 +1145,10 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HLI => self.bus.read_byte(self.registers.get_hl()),
+            ArithmeticTarget::D8 => self.read_next_byte(),
             _ => todo!(),
 
-            // TODO HL d8
         };
 
         let result = self.registers.a | value;
@@ -1091,9 +1170,9 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HLI => self.bus.read_byte(self.registers.get_hl()),
+            ArithmeticTarget::D8 => self.read_next_byte(),
             _ => todo!(),
-
-            // TODO HL d8
         };
 
         let result = self.registers.a ^ value;
@@ -1115,9 +1194,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HLI => self.bus.read_byte(self.registers.get_hl()),
+            ArithmeticTarget::D8 => self.read_next_byte(),
             _ => todo!(),
-
-            // TODO HL d8
+            //HLI -> gethl read address dans memory
+            //d8 readnextbyte
         };
 
         let (_result, did_underflow) = self.registers.a.overflowing_sub(value);
@@ -1132,69 +1213,105 @@ impl CPU {
     fn execute_inc(&mut self, target: ArithmeticTarget) {
         match target {
             ArithmeticTarget::A => {
-                self.registers.a = self.registers.a.wrapping_add(1);
+                let value = self.registers.a;
+                let new_value = self.registers.a.wrapping_add(1);
+                self.registers.a = new_value;
             }
             ArithmeticTarget::B => {
-                self.registers.b = self.registers.b.wrapping_add(1);
+                let value = self.registers.b;
+                let new_value = self.registers.b.wrapping_add(1);
+                self.registers.b = new_value;
             }
             ArithmeticTarget::C => {
-                self.registers.c = self.registers.c.wrapping_add(1);
+                let value = self.registers.c;
+                let new_value = self.registers.c.wrapping_add(1);
+                self.registers.c = new_value;
             }
             ArithmeticTarget::D => {
-                self.registers.d = self.registers.d.wrapping_add(1);
+                let value = self.registers.d;
+                let new_value = self.registers.d.wrapping_add(1);
+                self.registers.d = new_value;
             }
             ArithmeticTarget::E => {
-                self.registers.e = self.registers.e.wrapping_add(1);
+                let value = self.registers.e;
+                let new_value = self.registers.e.wrapping_add(1);
+                self.registers.e = new_value;
             }
             ArithmeticTarget::H => {
-                self.registers.h = self.registers.h.wrapping_add(1);
+                let value = self.registers.h;
+                let new_value = self.registers.h.wrapping_add(1);
+                self.registers.h = new_value;
             }
             ArithmeticTarget::L => {
-                self.registers.l = self.registers.l.wrapping_add(1);
+                let value = self.registers.l;
+                let new_value = self.registers.l.wrapping_add(1);
+                self.registers.l = new_value;
             }
-            // TODO HL
+            ArithmeticTarget::HLI => {
+                let address=self.registers.get_hl();
+                let value = self.bus.read_byte(address);
+                let new_value = value.wrapping_add(1);
+                self.bus.write_byte(address, new_value);
+            }
             _ => todo!()
-            // Ajoutez des cas pour les autres registres ou faites face à d'autres opérations si nécessaire.
         }
 
         // Mettez à jour les drapeaux appropriés.
-        self.registers.f.zero = self.registers.get(target) == 0;
+        self.registers.f.zero = new_value == 0;
         self.registers.f.subtract = false;
-        self.registers.f.half_carry = (self.registers.get(target) & 0x0F) == 0;
+        self.registers.f.half_carry = (new_value & 0x0F) == 0;
     }
 
     fn execute_dec(&mut self, target: ArithmeticTarget) {
         match target {
             ArithmeticTarget::A => {
-                self.registers.a = self.registers.a.wrapping_sub(1);
+                let value = self.registers.a;
+                let new_value = self.registers.a.wrapping_sub(1);
+                self.registers.a = new_value;
             }
             ArithmeticTarget::B => {
-                self.registers.b = self.registers.b.wrapping_sub(1);
+                let value = self.registers.b;
+                let new_value = self.registers.b.wrapping_sub(1);
+                self.registers.b = new_value;
             }
             ArithmeticTarget::C => {
-                self.registers.c = self.registers.c.wrapping_sub(1);
+                let value = self.registers.c;
+                let new_value = self.registers.c.wrapping_sub(1);
+                self.registers.c = new_value;
             }
             ArithmeticTarget::D => {
-                self.registers.d = self.registers.d.wrapping_sub(1);
+                let value = self.registers.d;
+                let new_value = self.registers.d.wrapping_sub(1);
+                self.registers.d = new_value;
             }
             ArithmeticTarget::E => {
-                self.registers.e = self.registers.e.wrapping_sub(1);
+                let value = self.registers.e;
+                let new_value = self.registers.e.wrapping_sub(1);
+                self.registers.e = new_value;
             }
             ArithmeticTarget::H => {
-                self.registers.h = self.registers.h.wrapping_sub(1);
+                let value = self.registers.h;
+                let new_value = self.registers.h.wrapping_sub(1);
+                self.registers.h = new_value;
             }
             ArithmeticTarget::L => {
-                self.registers.l = self.registers.l.wrapping_sub(1);
+                let value = self.registers.l;
+                let new_value = self.registers.l.wrapping_sub(1);
+                self.registers.l = new_value;
             }
-            // TODO HL
+            ArithmeticTarget::HLI => {
+                let address=self.registers.get_hl();
+                let value = self.bus.read_byte(address);
+                let new_value = value.wrapping_sub(1);
+                self.bus.write_byte(address, new_value);
+            }
             _ => todo!()
-            // Ajoutez des cas pour les autres registres ou faites face à d'autres opérations si nécessaire.
         }
 
         // Mettez à jour les drapeaux appropriés (Zéro, Soustraction, Demi-retenue).
-        self.registers.f.zero = self.registers.get(target) == 0;
+        self.registers.f.zero = new_value == 0;
         self.registers.f.subtract = true;
-        self.registers.f.half_carry = (self.registers.get(target) & 0x0F) == 0x0F;
+        self.registers.f.half_carry = (new_value & 0x0F) == 0x0F;
     }
 
     fn execute_ccf(&mut self) {
@@ -1835,7 +1952,7 @@ impl CPU {
         self.registers.pc = new_pc;
     }
 
-    fn stop(&mut self) {
+    /*fn stop(&mut self) {
         // Mettez en pause ou désactivez les horloges du système et les horloges principales ici.
         // La logique exacte dépendra de la manière dont votre émulateur gère les horloges.
 
@@ -1852,6 +1969,6 @@ impl CPU {
 
         // Par exemple, vous pouvez ajouter une variable d'état pour suivre l'état HALT :
         self.halted = true;
-    }
+    }*/
 }
 

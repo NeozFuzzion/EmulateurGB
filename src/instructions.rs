@@ -6,6 +6,9 @@ struct CPU {
     bus: MemoryBus,
     sp: u16,
     interrupt_enable_flag: bool,
+    halt: bool,
+    ei: u32,
+    di: u32
 }
 
 struct MemoryBus {
@@ -49,11 +52,11 @@ enum LoadType {
 }
 
 enum LoadByteTarget{
-    A, B, C, D, E, H, L, AddressHL, AddressBC, AddressDE, AddressHLP, AddressHLM, AddressC, Address16
+    A, B, C, D, E, H, L, AddressHL, AddressBC, AddressDE, AddressHLP, AddressHLM, AddressC, Address16, Address8
 }
 
 enum LoadByteSource{
-    A, B, C, D, E, H, L, AddressHL, AddressBC, AddressDE, AddressHLP, AddressHLM, AddressC, D8
+    A, B, C, D, E, H, L, AddressHL, AddressBC, AddressDE, AddressHLP, AddressHLM, AddressC, D8, Address8
 }
 
 enum LoadWordTarget{
@@ -75,6 +78,7 @@ enum Instruction {
     NOP,
     ADD(ArithmeticTarget),
     ADDHL(ArithmeticTarget),
+    ADDSP(ArithmeticTarget),
     ADC(ArithmeticTarget),
     SUB(ArithmeticTarget),
     SBC(ArithmeticTarget),
@@ -104,6 +108,7 @@ enum Instruction {
     SLA(ArithmeticTarget),
     SWAP(ArithmeticTarget),
     LD(LoadType),
+    LDH(LoadType),
     JP(JumpTest, JumpCondition),
     PUSH(StackTarget),
     POP(StackTarget),
@@ -697,19 +702,19 @@ impl Instruction {
             0xDE => Some(Instruction::SBC(ArithmeticTarget::D8)),
             0xDF => Some(Instruction::RST(RstTarget::Rst18H)),
 
-            0xE0 => Some(Instruction::LDH(LoadType::LoadByte(LoadByteTarget::AddressC, LoadByteSource::A))),
+            0xE0 => Some(Instruction::LDH(LoadType::LoadByte(LoadByteTarget::Address8, LoadByteSource::A))),
             0xE1 => Some(Instruction::POP(StackTarget::HL)),
             0xE2 => Some(Instruction::LD(LoadType::LoadByte(LoadByteTarget::AddressC, LoadByteSource::A))),
             0xE5 => Some(Instruction::PUSH(StackTarget::HL)),
             0xE6 => Some(Instruction::AND(ArithmeticTarget::D8)),
             0xE7 => Some(Instruction::RST(RstTarget::Rst20H)),
-            0xE8 => Some(Instruction::ADDSP(D8)),
+            0xE8 => Some(Instruction::ADDSP(ArithmeticTarget::D8)),
             0xE9 => Some(Instruction::JP(JumpTest::Always, JumpCondition::HL)),
             0xEA => Some(Instruction::LD(LoadType::LoadByte(LoadByteTarget::Address16, LoadByteSource::A))),
             0xEE => Some(Instruction::XOR(ArithmeticTarget::D8)),
             0xEF => Some(Instruction::RST(RstTarget::Rst28H)),
 
-            0xF0 => Some(Instruction::LDH(LoadType::LoadByte(LoadByteTarget::A, LoadByteSource::AddressC))),
+            0xF0 => Some(Instruction::LDH(LoadType::LoadByte(LoadByteTarget::A, LoadByteSource::Address8))),
             0xF1 => Some(Instruction::POP(StackTarget::AF)),
             0xF2 => Some(Instruction::LD(LoadType::LoadByte(LoadByteTarget::A, LoadByteSource::AddressC))),
             0xF3 => Some(Instruction::DI),
@@ -911,7 +916,7 @@ impl CPU {
             Instruction::LD(load_type) => {
                 match load_type {
                     LoadType::Byte(target, source) => {
-                        
+
                         let source_value = match source {
                             LoadByteSource::A => self.registers.a,
                             LoadByteSource::B => self.registers.b,
@@ -929,7 +934,7 @@ impl CPU {
                             LoadByteSource::AddressHL => self.bus.read_byte(self.registers.get_hl()),
                             _ => { panic!("TODO: implement other sources") }
                         };
-                        match target {                            
+                        match target {
                             LoadByteTarget::A => self.registers.a = source_value,
                             LoadByteTarget::B => self.registers.b = source_value,
                             LoadByteTarget::C => self.registers.c = source_value,
@@ -955,6 +960,26 @@ impl CPU {
                                 self.pc = self.pc.wrapping_add(1);
                             }
                         }
+                    }
+                    _ => { panic!("TODO: implement other load types") }
+                }
+            }
+
+            Instruction::LDH(load_type) => {
+                match load_type {
+                    LoadType::Byte(target, source) => {
+
+                        let source_value = match source {
+                            LoadByteSource::A => self.registers.a,
+                            LoadByteSource::Address8 => self.bus.read_byte(0xFF00 | (self.read_next_byte() as u16)),
+                            _ => { panic!("TODO: implement other sources") }
+                        };
+                        match target {
+                            LoadByteTarget::A => self.registers.a = source_value,
+                            LoadByteTarget::Address8 => self.bus.write_byte(0xFF00 | (self.read_next_byte() as u16) , source_value),
+                            _ => { panic!("TODO: implement other targets") }
+                        };
+                        self.pc = self.pc.wrapping_add(1);
                     }
                     _ => { panic!("TODO: implement other load types") }
                 }
@@ -1003,7 +1028,7 @@ impl CPU {
 
             Instruction::DAA => {self.daa();}
 
-            Instruction::JP(test) => {
+            Instruction::JP(test, ju) => {
                 let jump_condition = match test {
                     JumpTest::NotZero => !self.registers.f.zero,
                     JumpTest::NotCarry => !self.registers.f.carry,
@@ -1011,8 +1036,9 @@ impl CPU {
                     JumpTest::Carry => self.registers.f.carry,
                     JumpTest::Always => true,
                 };
-                self.jump(jump_condition);
+                self.jump(jump_condition,ju);
             }
+
             Instruction::JR(test) => {
                 let jump_condition = match test {
                     JumpTest::NotZero => !self.registers.f.zero,
@@ -1023,30 +1049,45 @@ impl CPU {
                 };
                 self.jump_relative(jump_condition);
             }
+
             Instruction::JPI => self.jump_indirect(),
+
             Instruction::RETI => {
-                //self.reti();
-            }
-            Instruction::STOP => todo!(),
-            Instruction::HALT => todo!(),
+                self.pc = self.pop();
+                self.ei = 1;
+            },
 
-            Instruction::EI => todo!(),
-            Instruction::DI => todo!(),
-            Instruction::NOP => todo!(),
-            Instruction::RST(_) => todo!(),
-            /*Instruction::STOP => {
-                self.stop();
-            }
+            Instruction::STOP => 1,
 
-            Instruction::HALT => {
-                self.halt();
-            }
-            Instruction::DI => {
+            Instruction::HALT =>{self.halt = true;
+                1},
 
-            }
             Instruction::EI => {
-                
-            }*/
+                self.ei  = 2;
+            },
+
+            Instruction::DI => {
+                self.di  = 1;
+            },
+
+            Instruction::NOP => 1,
+
+            Instruction::RST(npc) => {
+                let old_pc = self.pc;
+                self.push(old_pc);
+                match npc {
+                    RstTarget::Rst00H => self.pc = 0x00,
+                    RstTarget::Rst08H => self.pc = 0x08,
+                    RstTarget::Rst10H => self.pc = 0x10,
+                    RstTarget::Rst18H => self.pc = 0x18,
+                    RstTarget::Rst20H => self.pc = 0x20,
+                    RstTarget::Rst28H => self.pc = 0x28,
+                    RstTarget::Rst30H => self.pc = 0x30,
+                    RstTarget::Rst38H => self.pc = 0x38,
+                }
+            },
+
+            Instruction::ADDSP(targetd8) => execute_addsp(targetd8),
         }
     }
 
@@ -1106,6 +1147,19 @@ impl CPU {
         // then the addition caused a carry from the lower 12 bits to the upper 4 bits.
         self.registers.f.half_carry = (self.registers.get_hl() & 0xFFF) + (value & 0xFFF) > 0xFFF;
         self.registers.set_hl(new_value);
+    }
+
+    fn execute_addsp(&mut self) {
+        let signed_byte = self.read_next_byte() as i8;
+        let value = self.sp;
+        let (new_value, did_overflow) = self.sp.overflowing_add(signed_byte);
+        self.registers.f.subtract = false;
+        self.registers.f.carry = did_overflow;
+        // Half Carry is set if adding the lower 12 bits of the value and register HL
+        // together result in a value bigger than 0xFFF. If the result is larger than 0xFFF,
+        // then the addition caused a carry from the lower 12 bits to the upper 4 bits.
+        self.registers.f.half_carry = (self.registers.get_hl() & 0xFFF) + (value & 0xFFF) > 0xFFF;
+        self.sp=new_value;
     }
 
     fn execute_adc(&mut self, target: ArithmeticTarget) {
@@ -1998,13 +2052,20 @@ impl CPU {
         };
     }
 
-    fn jump(&self, should_jump: bool) -> u16 {
-        if should_jump {
-            let least_significant_byte = self.bus.read_byte(self.pc + 1) as u16;
-            let most_significant_byte = self.bus.read_byte(self.pc + 2) as u16;
-            (most_significant_byte << 8) | least_significant_byte
-        } else {
-            self.pc.wrapping_add(3)
+    fn jump(&self, should_jump: bool, ju : JumpCondition) -> u16 {
+        match ju {
+            JumpCondition::Address16 => {
+                if should_jump {
+                    let least_significant_byte = self.bus.read_byte(self.pc + 1) as u16;
+                    let most_significant_byte = self.bus.read_byte(self.pc + 2) as u16;
+                    (most_significant_byte << 8) | least_significant_byte
+                } else {
+                    self.pc.wrapping_add(3)
+                }
+            },
+            JumpCondition::AddressHL => {
+                self.registers.get_hl()
+            }
         }
     }
 
@@ -2038,35 +2099,5 @@ impl CPU {
             self.pc.wrapping_add(1)
         }
     }
-/*
-    fn reti(&mut self) {
-        // Activer les interruptions en définissant IME sur 1.
-        self.registers.ime = true;
-
-        // Effectuer un retour inconditionnel en utilisant l'adresse stockée dans la pile.
-        let low_byte = self.pop_stack();
-        let high_byte = self.pop_stack();
-        let new_pc = u16::from_le_bytes([low_byte, high_byte]);
-        self.registers.pc = new_pc;
-    }
-
-    fn stop(&mut self) {
-        // Mettez en pause ou désactivez les horloges du système et les horloges principales ici.
-        // La logique exacte dépendra de la manière dont votre émulateur gère les horloges.
-
-        // Pour une simulation simple, vous pourriez mettre en pause un cycle d'horloge ou
-        // désactiver la mise à jour du registre PC pendant cette période.
-
-        // Par exemple, vous pourriez ajouter une variable pour suivre l'état d'arrêt :
-        self.stopped = true;
-    }
-
-    fn halt(&mut self) {
-        // Mettez le processeur en état de veille (HALT) en attendant une interruption.
-        // La logique exacte dépendra de la manière dont votre émulateur gère les interruptions et les états de veille.
-
-        // Par exemple, vous pouvez ajouter une variable d'état pour suivre l'état HALT :
-        self.halted = true;
-    }*/
 }
 

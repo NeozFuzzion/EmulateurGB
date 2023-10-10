@@ -1,8 +1,11 @@
+use crate::Registers;
+
 struct CPU {
     registers: Registers,
     pc: u16,
     bus: MemoryBus,
-    sp: u16
+    sp: u16,
+    interrupt_enable_flag: bool,
 }
 
 struct MemoryBus {
@@ -14,17 +17,18 @@ impl MemoryBus {
         self.memory[address as usize]
     }
 
-    /*fn write_byte(&self, addr: u16, byte: u8) {
-        self.memory[address as usize]=byte
-    }*/
-
-    fn read_word(&self, address: u16) -> u16 {
-        u16::from(self.read_byte(addr)) | (u16::from(self.read_byte(addr + 1)) << 8)
+    fn write_byte(&self, addr: u16, byte: u8) {
+        self.memory[addr as usize]=byte
     }
 
-    //fn write_word(&self, addr: u16, byte: u16) {
-      //  self.memory[address as usize]=byte
-    //}
+    fn read_word(&self, address: u16) -> u16 {
+        u16::from(self.read_byte(address)) | (u16::from(self.read_byte(address + 1)) << 8)
+    }
+
+    fn write_word(&mut self, addr: u16, word: u16) {
+        self.memory[addr as usize] = (word & 0xFF) as u8;
+        self.memory[(addr + 1) as usize] = ((word >> 8) & 0xFF) as u8;
+    }
 }
 
 enum JumpTest {
@@ -35,8 +39,40 @@ enum JumpTest {
     Always
 }
 
+enum JumpCondition{
+    Address16, AddressHL
+}
+
+enum LoadType {
+    Byte(LoadByteTarget, LoadByteSource),
+    Word(LoadWordTarget, LoadWordSource)
+}
+
+enum LoadByteTarget{
+    A, B, C, D, E, H, L, AddressHL, AddressBC, AddressDE, AddressHLP, AddressHLM, AddressC, Address16
+}
+
+enum LoadByteSource{
+    A, B, C, D, E, H, L, AddressHL, AddressBC, AddressDE, AddressHLP, AddressHLM, AddressC, D8
+}
+
+enum LoadWordTarget{
+    BC, DE, HL, SP, Address16
+}
+
+enum LoadWordSource{
+    D16, SP, HL, SPR8
+}
+
+enum StackTarget {AF, HL , BC, DE}
+
+
+enum RstTarget{
+    Rst00H, Rst08H, Rst10H, Rst18H, Rst20H, Rst28H, Rst30H, Rst38H,
+}
 
 enum Instruction {
+    NOP,
     ADD(ArithmeticTarget),
     ADDHL(ArithmeticTarget),
     ADC(ArithmeticTarget),
@@ -55,10 +91,10 @@ enum Instruction {
     RRA,
     RLA,
     RRCA,
-    RRLA,
-    BIT(ArithmeticTarget, u8), // BitTestTarget represents the register to test and u8 represents the bit number (0-7).
-    RESET(ArithmeticTarget, u8), // BitResetTarget represents the register to reset and u8 represents the bit number (0-7).
-    SET(ArithmeticTarget, u8), // BitSetTarget represents the register to set and u8 represents the bit number (0-7).
+    RLCA,
+    BIT(ArithmeticTarget, u8), // ArithmeticTarget represents the register to test and u8 represents the bit number (0-7).
+    RESET(ArithmeticTarget, u8), // ArithmeticTarget represents the register to reset and u8 represents the bit number (0-7).
+    SET(ArithmeticTarget, u8), // ArithmeticTarget represents the register to set and u8 represents the bit number (0-7).
     SRL(ArithmeticTarget),
     RR(ArithmeticTarget),
     RL(ArithmeticTarget),
@@ -68,23 +104,25 @@ enum Instruction {
     SLA(ArithmeticTarget),
     SWAP(ArithmeticTarget),
     LD(LoadType),
-    JP(JumpTest),
+    JP(JumpTest, JumpCondition),
     PUSH(StackTarget),
     POP(StackTarget),
-    CALL(JumpTest),
+    CALL(JumpTest, JumpCondition),
     RET(JumpTest),
     JPI,
-    JR(JumpTest, offset),
+    JR(JumpTest),
     RETI,
     STOP,
-    HALT
+    HALT,
+    EI,
+    DI,
+    RST(RstTarget)
 }
 
 enum ArithmeticTarget {
-    A, B, C, D, E, H, L, HL, AF, BC, DE, SP, HLI, D8
+    A, B, C, D, E, H, L, HL, AF, BC, DE, SP, AddressHL, D8
 }
 
-enum StackTarget {AF, HL , BC, DE }
 
 impl Instruction {
     fn from_byte(byte: u8, prefixed: bool) -> Option<Instruction> {
@@ -409,69 +447,69 @@ impl Instruction {
         match byte {
             0x00 => Some(Instruction::NOP),
             0x01 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::BC, LoadWordSource::D16))),
-            0x02 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::HLI, LoadByteSource::A))),
-            0x03 => Some(Instruction::INC(IncDecTarget::BC)),
-            0x04 => Some(Instruction::INC(IncDecTarget::B)),
-            0x05 => Some(Instruction::DEC(IncDecTarget::B)),
+            0x02 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::AddressHL, LoadByteSource::A))),
+            0x03 => Some(Instruction::INC(ArithmeticTarget::BC)),
+            0x04 => Some(Instruction::INC(ArithmeticTarget::B)),
+            0x05 => Some(Instruction::DEC(ArithmeticTarget::B)),
             0x06 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::D8))),
             0x07 => Some(Instruction::RLCA),
-            0x08 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::A16, StackTarget::SP))),
+            0x08 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::Address16, LoadWordSource::SP))),
             0x09 => Some(Instruction::ADDHL(ArithmeticTarget::BC)),
-            0x0A => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::HLI))),
-            0x0B => Some(Instruction::DEC(IncDecTarget::BC)),
-            0x0C => Some(Instruction::INC(IncDecTarget::C)),
-            0x0D => Some(Instruction::DEC(IncDecTarget::C)),
+            0x0A => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::AddressBC))),
+            0x0B => Some(Instruction::DEC(ArithmeticTarget::BC)),
+            0x0C => Some(Instruction::INC(ArithmeticTarget::C)),
+            0x0D => Some(Instruction::DEC(ArithmeticTarget::C)),
             0x0E => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::D8))),
             0x0F => Some(Instruction::RRCA),
 
             0x10 => Some(Instruction::STOP),
             0x11 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::DE, LoadWordSource::D16))),
-            0x12 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::HLI, LoadByteSource::A))),
-            0x13 => Some(Instruction::INC(IncDecTarget::DE)),
-            0x14 => Some(Instruction::INC(IncDecTarget::D)),
-            0x15 => Some(Instruction::DEC(IncDecTarget::D)),
+            0x12 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::AddressDE, LoadByteSource::A))),
+            0x13 => Some(Instruction::INC(ArithmeticTarget::DE)),
+            0x14 => Some(Instruction::INC(ArithmeticTarget::D)),
+            0x15 => Some(Instruction::DEC(ArithmeticTarget::D)),
             0x16 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::D, LoadByteSource::D8))),
             0x17 => Some(Instruction::RLA),
-            0x18 => Some(Instruction::JR(JumpTest::Unconditional, offset)), // Remplacez "offset" par la valeur appropriée.
+            0x18 => Some(Instruction::JR(JumpTest::Always)), // Remplacez "offset" par la valeur appropriée.
             0x19 => Some(Instruction::ADDHL(ArithmeticTarget::DE)),
-            0x1A => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::HLI))),
-            0x1B => Some(Instruction::DEC(IncDecTarget::DE)),
-            0x1C => Some(Instruction::INC(IncDecTarget::E)),
-            0x1D => Some(Instruction::DEC(IncDecTarget::E)),
+            0x1A => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::AddressDE))),
+            0x1B => Some(Instruction::DEC(ArithmeticTarget::DE)),
+            0x1C => Some(Instruction::INC(ArithmeticTarget::E)),
+            0x1D => Some(Instruction::DEC(ArithmeticTarget::E)),
             0x1E => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::E, LoadByteSource::D8))),
             0x1F => Some(Instruction::RRA),
 
-            0x20 => Some(Instruction::JR(JumpTest::NotZero, offset)), // Remplacez "offset" par la valeur appropriée.
+            0x20 => Some(Instruction::JR(JumpTest::NotZero)), // Remplacez "offset" par la valeur appropriée.
             0x21 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::HL, LoadWordSource::D16))),
-            0x22 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::HLI, LoadByteSource::A))),
-            0x23 => Some(Instruction::INC(IncDecTarget::HL)),
-            0x24 => Some(Instruction::INC(IncDecTarget::H)),
-            0x25 => Some(Instruction::DEC(IncDecTarget::H)),
+            0x22 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::AddressHLP, LoadByteSource::A))),
+            0x23 => Some(Instruction::INC(ArithmeticTarget::HL)),
+            0x24 => Some(Instruction::INC(ArithmeticTarget::H)),
+            0x25 => Some(Instruction::DEC(ArithmeticTarget::H)),
             0x26 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::H, LoadByteSource::D8))),
             0x27 => Some(Instruction::DAA),
-            0x28 => Some(Instruction::JR(JumpTest::Zero, offset)), // Remplacez "offset" par la valeur appropriée.
+            0x28 => Some(Instruction::JR(JumpTest::Zero)), // Remplacez "offset" par la valeur appropriée.
             0x29 => Some(Instruction::ADDHL(ArithmeticTarget::HL)),
-            0x2A => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::HLI))),
-            0x2B => Some(Instruction::DEC(IncDecTarget::HL)),
-            0x2C => Some(Instruction::INC(IncDecTarget::L)),
-            0x2D => Some(Instruction::DEC(IncDecTarget::L)),
+            0x2A => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::AddressHLP))),
+            0x2B => Some(Instruction::DEC(ArithmeticTarget::HL)),
+            0x2C => Some(Instruction::INC(ArithmeticTarget::L)),
+            0x2D => Some(Instruction::DEC(ArithmeticTarget::L)),
             0x2E => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::L, LoadByteSource::D8))),
             0x2F => Some(Instruction::CPL),
 
-            0x30 => Some(Instruction::JR(JumpTest::NotCarry, offset)), // Remplacez "offset" par la valeur appropriée.
+            0x30 => Some(Instruction::JR(JumpTest::NotCarry)), // Remplacez "offset" par la valeur appropriée.
             0x31 => Some(Instruction::LD(LoadType::Word(LoadWordTarget::SP, LoadWordSource::D16))),
-            0x32 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::HLI, LoadByteSource::A))),
-            0x33 => Some(Instruction::INC(IncDecTarget::SP)),
-            0x34 => Some(Instruction::INC(IncDecTarget::MemoryHL)),
-            0x35 => Some(Instruction::DEC(IncDecTarget::MemoryHL)),
-            0x36 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::MemoryHL, LoadByteSource::D8))),
+            0x32 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::AddressHLM, LoadByteSource::A))),
+            0x33 => Some(Instruction::INC(ArithmeticTarget::SP)),
+            0x34 => Some(Instruction::INC(ArithmeticTarget::AddressHL)),
+            0x35 => Some(Instruction::DEC(ArithmeticTarget::AddressHL)),
+            0x36 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::AddressHL, LoadByteSource::D8))),
             0x37 => Some(Instruction::SCF),
-            0x38 => Some(Instruction::JR(JumpTest::Carry, offset)), // Remplacez "offset" par la valeur appropriée.
+            0x38 => Some(Instruction::JR(JumpTest::Carry)), // Remplacez "offset" par la valeur appropriée.
             0x39 => Some(Instruction::ADDHL(ArithmeticTarget::SP)),
-            0x3A => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::MemoryHLI))),
-            0x3B => Some(Instruction::DEC(IncDecTarget::SP)),
-            0x3C => Some(Instruction::INC(IncDecTarget::A)),
-            0x3D => Some(Instruction::DEC(IncDecTarget::A)),
+            0x3A => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::AddressHLM))),
+            0x3B => Some(Instruction::DEC(ArithmeticTarget::SP)),
+            0x3C => Some(Instruction::INC(ArithmeticTarget::A)),
+            0x3D => Some(Instruction::DEC(ArithmeticTarget::A)),
             0x3E => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::D8))),
             0x3F => Some(Instruction::CCF),
 
@@ -481,7 +519,7 @@ impl Instruction {
             0x43 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::E))),
             0x44 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::H))),
             0x45 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::L))),
-            0x46 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::MemoryHL))),
+            0x46 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::AddressHLM))),
             0x47 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::A))),
             0x48 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::B))),
             0x49 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::C))),
@@ -489,7 +527,7 @@ impl Instruction {
             0x4B => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::E))),
             0x4C => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::H))),
             0x4D => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::L))),
-            0x4E => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::MemoryHL))),
+            0x4E => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::AddressHLM))),
             0x4F => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::A))),
 
             0x50 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::D, LoadByteSource::B))),
@@ -498,7 +536,7 @@ impl Instruction {
             0x53 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::D, LoadByteSource::E))),
             0x54 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::D, LoadByteSource::H))),
             0x55 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::D, LoadByteSource::L))),
-            0x56 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::D, LoadByteSource::MemoryHL))),
+            0x56 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::D, LoadByteSource::AddressHL))),
             0x57 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::D, LoadByteSource::A))),
             0x58 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::E, LoadByteSource::B))),
             0x59 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::E, LoadByteSource::C))),
@@ -506,7 +544,7 @@ impl Instruction {
             0x5B => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::E, LoadByteSource::E))),
             0x5C => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::E, LoadByteSource::H))),
             0x5D => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::E, LoadByteSource::L))),
-            0x5E => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::E, LoadByteSource::MemoryHL))),
+            0x5E => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::E, LoadByteSource::AddressHL))),
             0x5F => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::E, LoadByteSource::A))),
 
             0x60 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::H, LoadByteSource::B))),
@@ -515,7 +553,7 @@ impl Instruction {
             0x63 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::H, LoadByteSource::E))),
             0x64 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::H, LoadByteSource::H))),
             0x65 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::H, LoadByteSource::L))),
-            0x66 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::H, LoadByteSource::MemoryHL))),
+            0x66 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::H, LoadByteSource::AddressHL))),
             0x67 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::H, LoadByteSource::A))),
             0x68 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::L, LoadByteSource::B))),
             0x69 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::L, LoadByteSource::C))),
@@ -523,24 +561,24 @@ impl Instruction {
             0x6B => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::L, LoadByteSource::E))),
             0x6C => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::L, LoadByteSource::H))),
             0x6D => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::L, LoadByteSource::L))),
-            0x6E => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::L, LoadByteSource::MemoryHL))),
+            0x6E => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::L, LoadByteSource::AddressHL))),
             0x6F => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::L, LoadByteSource::A))),
 
-            0x70 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::MemoryHL, LoadByteSource::B))),
-            0x71 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::MemoryHL, LoadByteSource::C))),
-            0x72 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::MemoryHL, LoadByteSource::D))),
-            0x73 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::MemoryHL, LoadByteSource::E))),
-            0x74 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::MemoryHL, LoadByteSource::H))),
-            0x75 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::MemoryHL, LoadByteSource::L))),
+            0x70 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::AddressHL, LoadByteSource::B))),
+            0x71 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::AddressHL, LoadByteSource::C))),
+            0x72 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::AddressHL, LoadByteSource::D))),
+            0x73 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::AddressHL, LoadByteSource::E))),
+            0x74 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::AddressHL, LoadByteSource::H))),
+            0x75 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::AddressHL, LoadByteSource::L))),
             0x76 => Some(Instruction::HALT),
-            0x77 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::MemoryHL, LoadByteSource::A))),
+            0x77 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::AddressHL, LoadByteSource::A))),
             0x78 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::B))),
             0x79 => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::C))),
             0x7A => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::D))),
             0x7B => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::E))),
             0x7C => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::H))),
             0x7D => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::L))),
-            0x7E => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::MemoryHL))),
+            0x7E => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::AddressHL))),
             0x7F => Some(Instruction::LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::A))),
 
             0x80 => Some(Instruction::ADD(ArithmeticTarget::B)),
@@ -549,7 +587,7 @@ impl Instruction {
             0x83 => Some(Instruction::ADD(ArithmeticTarget::E)),
             0x84 => Some(Instruction::ADD(ArithmeticTarget::H)),
             0x85 => Some(Instruction::ADD(ArithmeticTarget::L)),
-            0x86 => Some(Instruction::ADD(ArithmeticTarget::MemoryHL)),
+            0x86 => Some(Instruction::ADD(ArithmeticTarget::AddressHL)),
             0x87 => Some(Instruction::ADD(ArithmeticTarget::A)),
             0x88 => Some(Instruction::ADC(ArithmeticTarget::B)),
             0x89 => Some(Instruction::ADC(ArithmeticTarget::C)),
@@ -557,7 +595,7 @@ impl Instruction {
             0x8B => Some(Instruction::ADC(ArithmeticTarget::E)),
             0x8C => Some(Instruction::ADC(ArithmeticTarget::H)),
             0x8D => Some(Instruction::ADC(ArithmeticTarget::L)),
-            0x8E => Some(Instruction::ADC(ArithmeticTarget::MemoryHL)),
+            0x8E => Some(Instruction::ADC(ArithmeticTarget::AddressHL)),
             0x8F => Some(Instruction::ADC(ArithmeticTarget::A)),
 
             0x80 => Some(Instruction::ADD(ArithmeticTarget::B)),
@@ -566,7 +604,7 @@ impl Instruction {
             0x83 => Some(Instruction::ADD(ArithmeticTarget::E)),
             0x84 => Some(Instruction::ADD(ArithmeticTarget::H)),
             0x85 => Some(Instruction::ADD(ArithmeticTarget::L)),
-            0x86 => Some(Instruction::ADD(ArithmeticTarget::MemoryHL)),
+            0x86 => Some(Instruction::ADD(ArithmeticTarget::AddressHL)),
             0x87 => Some(Instruction::ADD(ArithmeticTarget::A)),
             0x88 => Some(Instruction::ADC(ArithmeticTarget::B)),
             0x89 => Some(Instruction::ADC(ArithmeticTarget::C)),
@@ -574,7 +612,7 @@ impl Instruction {
             0x8B => Some(Instruction::ADC(ArithmeticTarget::E)),
             0x8C => Some(Instruction::ADC(ArithmeticTarget::H)),
             0x8D => Some(Instruction::ADC(ArithmeticTarget::L)),
-            0x8E => Some(Instruction::ADC(ArithmeticTarget::MemoryHL)),
+            0x8E => Some(Instruction::ADC(ArithmeticTarget::AddressHL)),
             0x8F => Some(Instruction::ADC(ArithmeticTarget::A)),
 
             0x90 => Some(Instruction::SUB(ArithmeticTarget::B)),
@@ -583,7 +621,7 @@ impl Instruction {
             0x93 => Some(Instruction::SUB(ArithmeticTarget::E)),
             0x94 => Some(Instruction::SUB(ArithmeticTarget::H)),
             0x95 => Some(Instruction::SUB(ArithmeticTarget::L)),
-            0x96 => Some(Instruction::SUB(ArithmeticTarget::MemoryHL)),
+            0x96 => Some(Instruction::SUB(ArithmeticTarget::AddressHL)),
             0x97 => Some(Instruction::SUB(ArithmeticTarget::A)),
             0x98 => Some(Instruction::SBC(ArithmeticTarget::B)),
             0x99 => Some(Instruction::SBC(ArithmeticTarget::C)),
@@ -591,7 +629,7 @@ impl Instruction {
             0x9B => Some(Instruction::SBC(ArithmeticTarget::E)),
             0x9C => Some(Instruction::SBC(ArithmeticTarget::H)),
             0x9D => Some(Instruction::SBC(ArithmeticTarget::L)),
-            0x9E => Some(Instruction::SBC(ArithmeticTarget::MemoryHL)),
+            0x9E => Some(Instruction::SBC(ArithmeticTarget::AddressHL)),
             0x9F => Some(Instruction::SBC(ArithmeticTarget::A)),
 
             0xA0 => Some(Instruction::AND(ArithmeticTarget::B)),
@@ -600,7 +638,7 @@ impl Instruction {
             0xA3 => Some(Instruction::AND(ArithmeticTarget::E)),
             0xA4 => Some(Instruction::AND(ArithmeticTarget::H)),
             0xA5 => Some(Instruction::AND(ArithmeticTarget::L)),
-            0xA6 => Some(Instruction::AND(ArithmeticTarget::MemoryHL)),
+            0xA6 => Some(Instruction::AND(ArithmeticTarget::AddressHL)),
             0xA7 => Some(Instruction::AND(ArithmeticTarget::A)),
             0xA8 => Some(Instruction::XOR(ArithmeticTarget::B)),
             0xA9 => Some(Instruction::XOR(ArithmeticTarget::C)),
@@ -608,7 +646,7 @@ impl Instruction {
             0xAB => Some(Instruction::XOR(ArithmeticTarget::E)),
             0xAC => Some(Instruction::XOR(ArithmeticTarget::H)),
             0xAD => Some(Instruction::XOR(ArithmeticTarget::L)),
-            0xAE => Some(Instruction::XOR(ArithmeticTarget::MemoryHL)),
+            0xAE => Some(Instruction::XOR(ArithmeticTarget::AddressHL)),
             0xAF => Some(Instruction::XOR(ArithmeticTarget::A)),
 
             0xB0 => Some(Instruction::OR(ArithmeticTarget::B)),
@@ -617,7 +655,7 @@ impl Instruction {
             0xB3 => Some(Instruction::OR(ArithmeticTarget::E)),
             0xB4 => Some(Instruction::OR(ArithmeticTarget::H)),
             0xB5 => Some(Instruction::OR(ArithmeticTarget::L)),
-            0xB6 => Some(Instruction::OR(ArithmeticTarget::MemoryHL)),
+            0xB6 => Some(Instruction::OR(ArithmeticTarget::AddressHL)),
             0xB7 => Some(Instruction::OR(ArithmeticTarget::A)),
             0xB8 => Some(Instruction::CP(ArithmeticTarget::B)),
             0xB9 => Some(Instruction::CP(ArithmeticTarget::C)),
@@ -625,23 +663,23 @@ impl Instruction {
             0xBB => Some(Instruction::CP(ArithmeticTarget::E)),
             0xBC => Some(Instruction::CP(ArithmeticTarget::H)),
             0xBD => Some(Instruction::CP(ArithmeticTarget::L)),
-            0xBE => Some(Instruction::CP(ArithmeticTarget::MemoryHL)),
+            0xBE => Some(Instruction::CP(ArithmeticTarget::AddressHL)),
             0xBF => Some(Instruction::CP(ArithmeticTarget::A)),
 
             0xC0 => Some(Instruction::RET(JumpTest::NotZero)),
             0xC1 => Some(Instruction::POP(StackTarget::BC)),
             0xC2 => Some(Instruction::JP(JumpTest::NotZero, JumpCondition::Address16)),
-            0xC3 => Some(Instruction::JP(JumpTest::Unconditional, JumpCondition::Address16)),
+            0xC3 => Some(Instruction::JP(JumpTest::Always, JumpCondition::Address16)),
             0xC4 => Some(Instruction::CALL(JumpTest::NotZero, JumpCondition::Address16)),
             0xC5 => Some(Instruction::PUSH(StackTarget::BC)),
             0xC6 => Some(Instruction::ADD(ArithmeticTarget::D8)),
             0xC7 => Some(Instruction::RST(RstTarget::Rst00H)),
             0xC8 => Some(Instruction::RET(JumpTest::Zero)),
-            0xC9 => Some(Instruction::RET(JumpTest::Unconditional)),
+            0xC9 => Some(Instruction::RET(JumpTest::Always)),
             0xCA => Some(Instruction::JP(JumpTest::Zero, JumpCondition::Address16)),
             0xCB => Some(Instruction::PrefixCB),
             0xCC => Some(Instruction::CALL(JumpTest::Zero, JumpCondition::Address16)),
-            0xCD => Some(Instruction::CALL(JumpTest::Unconditional, JumpCondition::Address16)),
+            0xCD => Some(Instruction::CALL(JumpTest::Always, JumpCondition::Address16)),
             0xCE => Some(Instruction::ADC(ArithmeticTarget::D8)),
             0xCF => Some(Instruction::RST(RstTarget::Rst08H)),
 
@@ -655,32 +693,26 @@ impl Instruction {
             0xD8 => Some(Instruction::RET(JumpTest::Carry)),
             0xD9 => Some(Instruction::RETI),
             0xDA => Some(Instruction::JP(JumpTest::Carry, JumpCondition::Address16)),
-            //TODO 0xDC CALL C,a16
-            // 0xDE SBC A,d8
-            // 0xDF RST 18H
+            0xDC => Some(Instruction::CALL(JumpTest::Carry, JumpCondition::Address16)),
+            0xDE => Some(Instruction::SBC(ArithmeticTarget::D8)),
+            0xDF => Some(Instruction::RST(RstTarget::Rst18H)),
 
-            0xE0 => Some(Instruction::LD(LoadType::LoadByte(LoadByteTarget::MemoryHighOffsetA, LoadByteSource::A))),
+            0xE0 => Some(Instruction::LDH(LoadType::LoadByte(LoadByteTarget::AddressC, LoadByteSource::A))),
             0xE1 => Some(Instruction::POP(StackTarget::HL)),
-            0xE2 => Some(Instruction::LD(LoadType::LoadByte(LoadByteTarget::MemoryC, LoadByteSource::A))),
-            0xE3 => None, // Instruction non définie
-            0xE4 => None, // Instruction non définie
+            0xE2 => Some(Instruction::LD(LoadType::LoadByte(LoadByteTarget::AddressC, LoadByteSource::A))),
             0xE5 => Some(Instruction::PUSH(StackTarget::HL)),
             0xE6 => Some(Instruction::AND(ArithmeticTarget::D8)),
             0xE7 => Some(Instruction::RST(RstTarget::Rst20H)),
             0xE8 => Some(Instruction::ADDSP(D8)),
-            0xE9 => Some(Instruction::JP(JumpTest::Unconditional, JumpCondition::HL)),
-            0xEA => Some(Instruction::LD(LoadType::LoadByte(LoadByteTarget::MemoryAddress16, LoadByteSource::A))),
-            0xEB => None, // Instruction non définie
-            0xEC => None, // Instruction non définie
-            0xED => None, // Instruction non définie
+            0xE9 => Some(Instruction::JP(JumpTest::Always, JumpCondition::HL)),
+            0xEA => Some(Instruction::LD(LoadType::LoadByte(LoadByteTarget::Address16, LoadByteSource::A))),
             0xEE => Some(Instruction::XOR(ArithmeticTarget::D8)),
             0xEF => Some(Instruction::RST(RstTarget::Rst28H)),
 
-            0xF0 => Some(Instruction::LD(LoadType::LoadByte(LoadByteTarget::A, LoadByteSource::MemoryHighOffset))),
+            0xF0 => Some(Instruction::LDH(LoadType::LoadByte(LoadByteTarget::A, LoadByteSource::AddressC))),
             0xF1 => Some(Instruction::POP(StackTarget::AF)),
-            0xF2 => Some(Instruction::LD(LoadType::LoadByte(LoadByteTarget::A, LoadByteSource::MemoryC))),
+            0xF2 => Some(Instruction::LD(LoadType::LoadByte(LoadByteTarget::A, LoadByteSource::AddressC))),
             0xF3 => Some(Instruction::DI),
-            0xF4 => None, // Instruction non définie
             0xF5 => Some(Instruction::PUSH(StackTarget::AF)),
             0xF6 => Some(Instruction::OR(ArithmeticTarget::D8)),
             0xF7 => Some(Instruction::RST(RstTarget::Rst30H)),
@@ -688,8 +720,6 @@ impl Instruction {
             0xF9 => Some(Instruction::LD(LoadType::LoadSPHL)),
             0xFA => Some(Instruction::LD(LoadType::LoadByte(LoadByteTarget::A, LoadByteSource::MemoryAddress16))),
             0xFB => Some(Instruction::EI),
-            0xFC => None, // Instruction non définie
-            0xFD => None, // Instruction non définie
             0xFE => Some(Instruction::CP(ArithmeticTarget::D8)),
             0xFF => Some(Instruction::RST(RstTarget::Rst38H)),
             _ => /* TODO: Add mapping for rest of instructions */ None
@@ -700,7 +730,7 @@ impl CPU {
 
     fn read_next_byte(&self) -> u8 {
         let byte = self.bus.read_byte(self.pc);
-        self.registers.pc += 1;
+        self.pc += 1;
         byte
     }
 
@@ -749,7 +779,7 @@ impl CPU {
                         let new_value = self.add(value);
                         self.registers.a = new_value;
                     }
-                    ArithmeticTarget::HLI => {
+                    ArithmeticTarget::AddressHL => {
                         let value = self.bus.read_byte(self.registers.get_hl());
                         let new_value = self.add(value);
                         self.registers.a = new_value;
@@ -766,7 +796,7 @@ impl CPU {
 
             Instruction::ADDHL(target) => self.execute_add_hl(target),
 
-            Instruction::ADC(target) => self.adc(target),
+            Instruction::ADC(target) => self.execute_adc(target),
 
             Instruction::SUB(target) => self.execute_sub(target),
 
@@ -783,7 +813,7 @@ impl CPU {
             Instruction::INC(target) => {
                 match target {
                     ArithmeticTarget::A | ArithmeticTarget::B | ArithmeticTarget::C | ArithmeticTarget::D
-                    | ArithmeticTarget::E | ArithmeticTarget::H | ArithmeticTarget::L | ArithmeticTarget::HLI => {
+                    | ArithmeticTarget::E | ArithmeticTarget::H | ArithmeticTarget::L | ArithmeticTarget::AddressHL => {
                         self.execute_inc(target);
                     }
                     //pas de modifications de flag
@@ -814,7 +844,7 @@ impl CPU {
             Instruction::DEC(target) => {
                 match target {
                     ArithmeticTarget::A | ArithmeticTarget::B | ArithmeticTarget::C | ArithmeticTarget::D
-                    | ArithmeticTarget::E | ArithmeticTarget::H | ArithmeticTarget::L | ArithmeticTarget::HLI => {
+                    | ArithmeticTarget::E | ArithmeticTarget::H | ArithmeticTarget::L | ArithmeticTarget::AddressHL => {
                         self.execute_dec(target);
                     }
                     //pas de modifications de flag
@@ -854,7 +884,7 @@ impl CPU {
 
             Instruction::RRCA => self.execute_rrca(),
 
-            Instruction::RRLA => self.execute_rrla(),
+            Instruction::RLCA => self.execute_rlca(),
 
             Instruction::BIT(target, bit_num) => self.execute_bit(target, bit_num),
 
@@ -878,34 +908,52 @@ impl CPU {
 
             Instruction::SWAP(target) => self.execute_swap(target),
 
-            Instruction::JP(test) => {
-                let jump_condition = match test {
-                    JumpTest::NotZero => !self.registers.f.zero,
-                    JumpTest::NotCarry => !self.registers.f.carry,
-                    JumpTest::Zero => self.registers.f.zero,
-                    JumpTest::Carry => self.registers.f.carry,
-                    JumpTest::Always => true
-                };
-                self.jump(jump_condition)
-            },
-
             Instruction::LD(load_type) => {
                 match load_type {
                     LoadType::Byte(target, source) => {
+                        
                         let source_value = match source {
                             LoadByteSource::A => self.registers.a,
+                            LoadByteSource::B => self.registers.b,
+                            LoadByteSource::C => self.registers.c,
+                            LoadByteSource::D => self.registers.d,
+                            LoadByteSource::E => self.registers.e,
+                            LoadByteSource::H => self.registers.h,
+                            LoadByteSource::L => self.registers.l,
+                            LoadByteSource::AddressBC => self.bus.read_byte(self.registers.get_bc()),
+                            LoadByteSource::AddressDE => self.bus.read_byte(self.registers.get_de()),
+                            LoadByteSource::AddressHLP => self.bus.read_byte(self.registers.get_hlp()),
+                            LoadByteSource::AddressHLM => self.bus.read_byte(self.registers.get_hlm()),
+                            LoadByteSource::AddressC => self.bus.read_byte(0xFF00 | (self.registers.c as u16)),
                             LoadByteSource::D8 => self.read_next_byte(),
-                            LoadByteSource::HLI => self.bus.read_byte(self.registers.get_hl()),
+                            LoadByteSource::AddressHL => self.bus.read_byte(self.registers.get_hl()),
                             _ => { panic!("TODO: implement other sources") }
                         };
-                        match target {
+                        match target {                            
                             LoadByteTarget::A => self.registers.a = source_value,
-                            LoadByteTarget::HLI => self.bus.write_byte(self.registers.get_hl(), source_value),
+                            LoadByteTarget::B => self.registers.b = source_value,
+                            LoadByteTarget::C => self.registers.c = source_value,
+                            LoadByteTarget::D => self.registers.d = source_value,
+                            LoadByteTarget::E => self.registers.e = source_value,
+                            LoadByteTarget::H => self.registers.h = source_value,
+                            LoadByteTarget::L => self.registers.l = source_value,
+                            LoadByteTarget::AddressHL => self.bus.write_byte(self.registers.get_hl(), source_value),
+                            LoadByteTarget::AddressBC => self.bus.write_byte(self.registers.get_bc(), source_value),
+                            LoadByteTarget::AddressDE => self.bus.write_byte(self.registers.get_de(), source_value),
+                            LoadByteTarget::AddressHLP =>self.bus.write_byte(self.registers.get_hlp(), source_value),
+                            LoadByteTarget::AddressHLM => self.bus.write_byte(self.registers.get_hlm(), source_value),
+                            LoadByteTarget::AddressC => self.bus.write_byte(0xFF00 | (self.registers.c as u16) , source_value),
                             _ => { panic!("TODO: implement other targets") }
                         };
-                        match source {
-                            LoadByteSource::D8  => self.pc.wrapping_add(2),
-                            _                   => self.pc.wrapping_add(1),
+                        match (source, target) {
+                            (LoadByteSource::D8, _)
+                            | (LoadByteSource::A, LoadByteTarget::AddressC)
+                            | (LoadByteSource::AddressC, LoadByteTarget::A) => {
+                                self.pc = self.pc.wrapping_add(2);
+                            }
+                            _ => {
+                                self.pc = self.pc.wrapping_add(1);
+                            }
                         }
                     }
                     _ => { panic!("TODO: implement other load types") }
@@ -915,27 +963,34 @@ impl CPU {
             Instruction::PUSH(target) => {
                 let value = match target {
                     StackTarget::BC => self.registers.get_bc(),
+                    StackTarget::DE => self.registers.get_de(),
+                    StackTarget::HL => self.registers.get_hl(),
+                    StackTarget::AF => self.registers.get_af(),
+
                     _ => { panic!("TODO: support more targets") }
                 };
                 self.push(value);
-                self.pc.wrapping_add(1)
+                self.pc.wrapping_add(1);
             }
 
             Instruction::POP(target) => {
                 let result = self.pop();
                 match target {
                     StackTarget::BC => self.registers.set_bc(result),
+                    StackTarget::DE => self.registers.set_de(result),
+                    StackTarget::HL => self.registers.set_hl(result),
+                    StackTarget::AF => self.registers.set_af(result),
                     _ => { panic!("TODO: support more targets") }
                 };
-                self.pc.wrapping_add(1)
+                self.pc.wrapping_add(1);
             }
 
-            Instruction::CALL(test) => {
+            Instruction::CALL(test, target) => {
                 let jump_condition = match test {
                     JumpTest::NotZero => !self.registers.f.zero,
                     _ => { panic!("TODO: support more conditions") }
                 };
-                self.call(jump_condition)
+                self.call(jump_condition,target);
             }
 
             Instruction::RET(test) => {
@@ -943,33 +998,55 @@ impl CPU {
                     JumpTest::NotZero => !self.registers.f.zero,
                     _ => { panic!("TODO: support more conditions") }
                 };
-                self.return_(jump_condition)
+                self.return_(jump_condition);
             }
 
             Instruction::DAA => {self.daa();}
 
-            Instruction::JPI => {
-                self.jpi();
+            Instruction::JP(test) => {
+                let jump_condition = match test {
+                    JumpTest::NotZero => !self.registers.f.zero,
+                    JumpTest::NotCarry => !self.registers.f.carry,
+                    JumpTest::Zero => self.registers.f.zero,
+                    JumpTest::Carry => self.registers.f.carry,
+                    JumpTest::Always => true,
+                };
+                self.jump(jump_condition);
             }
-
-            Instruction::JR(condition, offset) => {
-                // Votre logique pour le saut relatif ici.
-                // Vous devez déterminer si la condition est vraie ou non.
-                // Si la condition est vraie, appelez la fonction jr avec la condition et l'offset appropriés.
-                // Par exemple :
-                // self.jr(condition, offset);
+            Instruction::JR(test) => {
+                let jump_condition = match test {
+                    JumpTest::NotZero => !self.registers.f.zero,
+                    JumpTest::NotCarry => !self.registers.f.carry,
+                    JumpTest::Zero => self.registers.f.zero,
+                    JumpTest::Carry => self.registers.f.carry,
+                    JumpTest::Always => true,
+                };
+                self.jump_relative(jump_condition);
             }
+            Instruction::JPI => self.jump_indirect(),
             Instruction::RETI => {
-                self.reti();
+                //self.reti();
             }
+            Instruction::STOP => todo!(),
+            Instruction::HALT => todo!(),
 
-            Instruction::STOP => {
+            Instruction::EI => todo!(),
+            Instruction::DI => todo!(),
+            Instruction::NOP => todo!(),
+            Instruction::RST(_) => todo!(),
+            /*Instruction::STOP => {
                 self.stop();
             }
 
             Instruction::HALT => {
                 self.halt();
             }
+            Instruction::DI => {
+
+            }
+            Instruction::EI => {
+                
+            }*/
         }
     }
 
@@ -1040,8 +1117,9 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HLI => self.bus.read_byte(self.registers.get_hl()),
+            ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
+            _=> todo!(),
         };
 
         let carry = if self.registers.f.carry { 1 } else { 0 };
@@ -1068,7 +1146,7 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HLI => self.bus.read_byte(self.registers.get_hl()),
+            ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
             _ => todo!(),
 
@@ -1092,7 +1170,7 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HLI => self.bus.read_byte(self.registers.get_hl()),
+            ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
             _ => todo!(),
 
@@ -1121,7 +1199,7 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HLI => self.bus.read_byte(self.registers.get_hl()),
+            ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
             _ => todo!(),
 
@@ -1145,7 +1223,7 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HLI => self.bus.read_byte(self.registers.get_hl()),
+            ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
             _ => todo!(),
 
@@ -1170,7 +1248,7 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HLI => self.bus.read_byte(self.registers.get_hl()),
+            ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
             _ => todo!(),
         };
@@ -1194,10 +1272,10 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HLI => self.bus.read_byte(self.registers.get_hl()),
+            ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
             _ => todo!(),
-            //HLI -> gethl read address dans memory
+            //AddressHL -> gethl read address dans memory
             //d8 readnextbyte
         };
 
@@ -1211,50 +1289,58 @@ impl CPU {
     }
 
     fn execute_inc(&mut self, target: ArithmeticTarget) {
-        match target {
+        let new_value = match target {
             ArithmeticTarget::A => {
                 let value = self.registers.a;
                 let new_value = self.registers.a.wrapping_add(1);
                 self.registers.a = new_value;
+                new_value
             }
             ArithmeticTarget::B => {
                 let value = self.registers.b;
                 let new_value = self.registers.b.wrapping_add(1);
                 self.registers.b = new_value;
+                new_value
             }
             ArithmeticTarget::C => {
                 let value = self.registers.c;
                 let new_value = self.registers.c.wrapping_add(1);
                 self.registers.c = new_value;
+                new_value
             }
             ArithmeticTarget::D => {
                 let value = self.registers.d;
                 let new_value = self.registers.d.wrapping_add(1);
                 self.registers.d = new_value;
+                new_value
             }
             ArithmeticTarget::E => {
                 let value = self.registers.e;
                 let new_value = self.registers.e.wrapping_add(1);
                 self.registers.e = new_value;
+                new_value
             }
             ArithmeticTarget::H => {
                 let value = self.registers.h;
                 let new_value = self.registers.h.wrapping_add(1);
                 self.registers.h = new_value;
+                new_value
             }
             ArithmeticTarget::L => {
                 let value = self.registers.l;
                 let new_value = self.registers.l.wrapping_add(1);
                 self.registers.l = new_value;
+                new_value
             }
-            ArithmeticTarget::HLI => {
+            ArithmeticTarget::AddressHL => {
                 let address=self.registers.get_hl();
                 let value = self.bus.read_byte(address);
                 let new_value = value.wrapping_add(1);
                 self.bus.write_byte(address, new_value);
+                new_value
             }
             _ => todo!()
-        }
+        };
 
         // Mettez à jour les drapeaux appropriés.
         self.registers.f.zero = new_value == 0;
@@ -1263,50 +1349,58 @@ impl CPU {
     }
 
     fn execute_dec(&mut self, target: ArithmeticTarget) {
-        match target {
+        let new_value = match target {
             ArithmeticTarget::A => {
                 let value = self.registers.a;
                 let new_value = self.registers.a.wrapping_sub(1);
                 self.registers.a = new_value;
+                new_value
             }
             ArithmeticTarget::B => {
                 let value = self.registers.b;
                 let new_value = self.registers.b.wrapping_sub(1);
                 self.registers.b = new_value;
+                new_value
             }
             ArithmeticTarget::C => {
                 let value = self.registers.c;
                 let new_value = self.registers.c.wrapping_sub(1);
                 self.registers.c = new_value;
+                new_value
             }
             ArithmeticTarget::D => {
                 let value = self.registers.d;
                 let new_value = self.registers.d.wrapping_sub(1);
                 self.registers.d = new_value;
+                new_value
             }
             ArithmeticTarget::E => {
                 let value = self.registers.e;
                 let new_value = self.registers.e.wrapping_sub(1);
                 self.registers.e = new_value;
+                new_value
             }
             ArithmeticTarget::H => {
                 let value = self.registers.h;
                 let new_value = self.registers.h.wrapping_sub(1);
                 self.registers.h = new_value;
+                new_value
             }
             ArithmeticTarget::L => {
                 let value = self.registers.l;
                 let new_value = self.registers.l.wrapping_sub(1);
                 self.registers.l = new_value;
+                new_value
             }
-            ArithmeticTarget::HLI => {
+            ArithmeticTarget::AddressHL => {
                 let address=self.registers.get_hl();
                 let value = self.bus.read_byte(address);
                 let new_value = value.wrapping_sub(1);
                 self.bus.write_byte(address, new_value);
+                new_value
             }
             _ => todo!()
-        }
+        };
 
         // Mettez à jour les drapeaux appropriés (Zéro, Soustraction, Demi-retenue).
         self.registers.f.zero = new_value == 0;
@@ -1387,7 +1481,7 @@ impl CPU {
         self.registers.f.half_carry = false;
     }
 
-    fn execute_rrla(&mut self) {
+    fn execute_rlca(&mut self) {
         let bit7 = (self.registers.a & 0x80) != 0;
 
         self.registers.a <<= 1;
@@ -1400,19 +1494,20 @@ impl CPU {
         self.registers.f.half_carry = false;
     }
 
-    fn execute_bit(&mut self, target: BitTestTarget, bit_num: u8) {
+    fn execute_bit(&mut self, target: ArithmeticTarget, bit_num: u8) {
         let value = match target {
-            BitTestTarget::A => self.registers.a,
-            BitTestTarget::B => self.registers.b,
-            BitTestTarget::C => self.registers.c,
-            BitTestTarget::D => self.registers.d,
-            BitTestTarget::E => self.registers.e,
-            BitTestTarget::H => self.registers.h,
-            BitTestTarget::L => self.registers.l,
-            BitTestTarget::HL => {
+            ArithmeticTarget::A => self.registers.a,
+            ArithmeticTarget::B => self.registers.b,
+            ArithmeticTarget::C => self.registers.c,
+            ArithmeticTarget::D => self.registers.d,
+            ArithmeticTarget::E => self.registers.e,
+            ArithmeticTarget::H => self.registers.h,
+            ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
                 self.bus.read_byte(address) // You may need to implement memory read here.
-            }
+            },
+            _ => todo!(),
         };
 
         // Test the specified bit and set flags accordingly.
@@ -1423,20 +1518,20 @@ impl CPU {
         self.registers.f.half_carry = true;
     }
 
-    fn execute_reset(&mut self, target: BitResetTarget, bit_num: u8) {
+    fn execute_reset(&mut self, target: ArithmeticTarget, bit_num: u8) {
         let mut value = match target {
-            BitResetTarget::A => self.registers.a,
-            BitResetTarget::B => self.registers.b,
-            BitResetTarget::C => self.registers.c,
-            BitResetTarget::D => self.registers.d,
-            BitResetTarget::E => self.registers.e,
-            BitResetTarget::H => self.registers.h,
-            BitResetTarget::L => self.registers.l,
-            BitResetTarget::HL => {
+            ArithmeticTarget::A => self.registers.a,
+            ArithmeticTarget::B => self.registers.b,
+            ArithmeticTarget::C => self.registers.c,
+            ArithmeticTarget::D => self.registers.d,
+            ArithmeticTarget::E => self.registers.e,
+            ArithmeticTarget::H => self.registers.h,
+            ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
-                value = self.bus.read_byte(address); // Read the value from memory.
-                value
-            }
+                self.bus.read_byte(address) // Read the value from memory.
+            },
+            _ => todo!(),
         };
 
         // Reset the specified bit.
@@ -1445,34 +1540,35 @@ impl CPU {
 
         // Update the register or memory with the new value.
         match target {
-            BitResetTarget::A => self.registers.a = value,
-            BitResetTarget::B => self.registers.b = value,
-            BitResetTarget::C => self.registers.c = value,
-            BitResetTarget::D => self.registers.d = value,
-            BitResetTarget::E => self.registers.e = value,
-            BitResetTarget::H => self.registers.h = value,
-            BitResetTarget::L => self.registers.l = value,
-            BitResetTarget::HL => {
+            ArithmeticTarget::A => self.registers.a = value,
+            ArithmeticTarget::B => self.registers.b = value,
+            ArithmeticTarget::C => self.registers.c = value,
+            ArithmeticTarget::D => self.registers.d = value,
+            ArithmeticTarget::E => self.registers.e = value,
+            ArithmeticTarget::H => self.registers.h = value,
+            ArithmeticTarget::L => self.registers.l = value,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
-            }
+            },
+            _ => todo!(),
         }
     }
 
-    fn execute_set(&mut self, target: BitSetTarget, bit_num: u8) {
+    fn execute_set(&mut self, target: ArithmeticTarget, bit_num: u8) {
         let mut value = match target {
-            BitSetTarget::A => self.registers.a,
-            BitSetTarget::B => self.registers.b,
-            BitSetTarget::C => self.registers.c,
-            BitSetTarget::D => self.registers.d,
-            BitSetTarget::E => self.registers.e,
-            BitSetTarget::H => self.registers.h,
-            BitSetTarget::L => self.registers.l,
-            BitSetTarget::HL => {
+            ArithmeticTarget::A => self.registers.a,
+            ArithmeticTarget::B => self.registers.b,
+            ArithmeticTarget::C => self.registers.c,
+            ArithmeticTarget::D => self.registers.d,
+            ArithmeticTarget::E => self.registers.e,
+            ArithmeticTarget::H => self.registers.h,
+            ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
-                value = self.bus.read_byte(address); // Read the value from memory.
-                value
-            }
+                self.bus.read_byte(address) // Read the value from memory.
+            },
+            _ => todo!(),
         };
 
         // Set the specified bit.
@@ -1481,34 +1577,35 @@ impl CPU {
 
         // Update the register or memory with the new value.
         match target {
-            BitSetTarget::A => self.registers.a = value,
-            BitSetTarget::B => self.registers.b = value,
-            BitSetTarget::C => self.registers.c = value,
-            BitSetTarget::D => self.registers.d = value,
-            BitSetTarget::E => self.registers.e = value,
-            BitSetTarget::H => self.registers.h = value,
-            BitSetTarget::L => self.registers.l = value,
-            BitSetTarget::HL => {
+            ArithmeticTarget::A => self.registers.a = value,
+            ArithmeticTarget::B => self.registers.b = value,
+            ArithmeticTarget::C => self.registers.c = value,
+            ArithmeticTarget::D => self.registers.d = value,
+            ArithmeticTarget::E => self.registers.e = value,
+            ArithmeticTarget::H => self.registers.h = value,
+            ArithmeticTarget::L => self.registers.l = value,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
-            }
+            },
+            _ => todo!(),
         }
     }
 
-    fn execute_srl(&mut self, target: ShiftRightLogicalTarget) {
+    fn execute_srl(&mut self, target: ArithmeticTarget) {
         let mut value = match target {
-            ShiftRightLogicalTarget::A => self.registers.a,
-            ShiftRightLogicalTarget::B => self.registers.b,
-            ShiftRightLogicalTarget::C => self.registers.c,
-            ShiftRightLogicalTarget::D => self.registers.d,
-            ShiftRightLogicalTarget::E => self.registers.e,
-            ShiftRightLogicalTarget::H => self.registers.h,
-            ShiftRightLogicalTarget::L => self.registers.l,
-            ShiftRightLogicalTarget::HL => {
+            ArithmeticTarget::A => self.registers.a,
+            ArithmeticTarget::B => self.registers.b,
+            ArithmeticTarget::C => self.registers.c,
+            ArithmeticTarget::D => self.registers.d,
+            ArithmeticTarget::E => self.registers.e,
+            ArithmeticTarget::H => self.registers.h,
+            ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
-                value = self.bus.read_byte(address); // Read the value from memory.
-                value
-            }
+                self.bus.read_byte(address) // Read the value from memory
+            },
+            _ => todo!(),
         };
 
         // Perform the bitwise right shift.
@@ -1518,17 +1615,18 @@ impl CPU {
 
         // Update the register or memory with the new value.
         match target {
-            ShiftRightLogicalTarget::A => self.registers.a = value,
-            ShiftRightLogicalTarget::B => self.registers.b = value,
-            ShiftRightLogicalTarget::C => self.registers.c = value,
-            ShiftRightLogicalTarget::D => self.registers.d = value,
-            ShiftRightLogicalTarget::E => self.registers.e = value,
-            ShiftRightLogicalTarget::H => self.registers.h = value,
-            ShiftRightLogicalTarget::L => self.registers.l = value,
-            ShiftRightLogicalTarget::HL => {
+            ArithmeticTarget::A => self.registers.a = value,
+            ArithmeticTarget::B => self.registers.b = value,
+            ArithmeticTarget::C => self.registers.c = value,
+            ArithmeticTarget::D => self.registers.d = value,
+            ArithmeticTarget::E => self.registers.e = value,
+            ArithmeticTarget::H => self.registers.h = value,
+            ArithmeticTarget::L => self.registers.l = value,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
-            }
+            },
+            _ => todo!()
         }
 
         // Update the flags.
@@ -1538,20 +1636,20 @@ impl CPU {
         self.registers.f.carry = carry;
     }
 
-    fn execute_rr(&mut self, target: RotateRightTarget) {
+    fn execute_rr(&mut self, target: ArithmeticTarget) {
         let mut value = match target {
-            RotateRightTarget::A => self.registers.a,
-            RotateRightTarget::B => self.registers.b,
-            RotateRightTarget::C => self.registers.c,
-            RotateRightTarget::D => self.registers.d,
-            RotateRightTarget::E => self.registers.e,
-            RotateRightTarget::H => self.registers.h,
-            RotateRightTarget::L => self.registers.l,
-            RotateRightTarget::HL => {
+            ArithmeticTarget::A => self.registers.a,
+            ArithmeticTarget::B => self.registers.b,
+            ArithmeticTarget::C => self.registers.c,
+            ArithmeticTarget::D => self.registers.d,
+            ArithmeticTarget::E => self.registers.e,
+            ArithmeticTarget::H => self.registers.h,
+            ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
-                value = self.bus.read_byte(address); // Read the value from memory.
-                value
-            }
+                self.bus.read_byte(address) // Read the value from memory.
+            },
+            _ => todo!(),
         };
 
         // Extract the carry bit and store it.
@@ -1565,17 +1663,18 @@ impl CPU {
 
         // Update the register or memory with the new value.
         match target {
-            RotateRightTarget::A => self.registers.a = value,
-            RotateRightTarget::B => self.registers.b = value,
-            RotateRightTarget::C => self.registers.c = value,
-            RotateRightTarget::D => self.registers.d = value,
-            RotateRightTarget::E => self.registers.e = value,
-            RotateRightTarget::H => self.registers.h = value,
-            RotateRightTarget::L => self.registers.l = value,
-            RotateRightTarget::HL => {
+            ArithmeticTarget::A => self.registers.a = value,
+            ArithmeticTarget::B => self.registers.b = value,
+            ArithmeticTarget::C => self.registers.c = value,
+            ArithmeticTarget::D => self.registers.d = value,
+            ArithmeticTarget::E => self.registers.e = value,
+            ArithmeticTarget::H => self.registers.h = value,
+            ArithmeticTarget::L => self.registers.l = value,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
-            }
+            },
+            _ => todo!(),
         }
 
         // Update the flags.
@@ -1585,20 +1684,20 @@ impl CPU {
         self.registers.f.carry = carry;
     }
 
-    fn execute_rl(&mut self, target: RotateLeftTarget) {
+    fn execute_rl(&mut self, target: ArithmeticTarget) {
         let mut value = match target {
-            RotateLeftTarget::A => self.registers.a,
-            RotateLeftTarget::B => self.registers.b,
-            RotateLeftTarget::C => self.registers.c,
-            RotateLeftTarget::D => self.registers.d,
-            RotateLeftTarget::E => self.registers.e,
-            RotateLeftTarget::H => self.registers.h,
-            RotateLeftTarget::L => self.registers.l,
-            RotateLeftTarget::HL => {
+            ArithmeticTarget::A => self.registers.a,
+            ArithmeticTarget::B => self.registers.b,
+            ArithmeticTarget::C => self.registers.c,
+            ArithmeticTarget::D => self.registers.d,
+            ArithmeticTarget::E => self.registers.e,
+            ArithmeticTarget::H => self.registers.h,
+            ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
-                value = self.bus.read_byte(address); // Read the value from memory.
-                value
-            }
+                self.bus.read_byte(address) // Read the value from memory.
+            },
+            _ => todo!(),
         };
 
         // Extract the carry bit and store it.
@@ -1612,17 +1711,18 @@ impl CPU {
 
         // Update the register or memory with the new value.
         match target {
-            RotateLeftTarget::A => self.registers.a = value,
-            RotateLeftTarget::B => self.registers.b = value,
-            RotateLeftTarget::C => self.registers.c = value,
-            RotateLeftTarget::D => self.registers.d = value,
-            RotateLeftTarget::E => self.registers.e = value,
-            RotateLeftTarget::H => self.registers.h = value,
-            RotateLeftTarget::L => self.registers.l = value,
-            RotateLeftTarget::HL => {
+            ArithmeticTarget::A => self.registers.a = value,
+            ArithmeticTarget::B => self.registers.b = value,
+            ArithmeticTarget::C => self.registers.c = value,
+            ArithmeticTarget::D => self.registers.d = value,
+            ArithmeticTarget::E => self.registers.e = value,
+            ArithmeticTarget::H => self.registers.h = value,
+            ArithmeticTarget::L => self.registers.l = value,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
-            }
+            },
+            _ => todo!(),
         }
 
         // Update the flags.
@@ -1632,20 +1732,20 @@ impl CPU {
         self.registers.f.carry = carry;
     }
 
-    fn execute_rrc(&mut self, target: RotateRightTarget) {
+    fn execute_rrc(&mut self, target: ArithmeticTarget) {
         let mut value = match target {
-            RotateRightTarget::A => self.registers.a,
-            RotateRightTarget::B => self.registers.b,
-            RotateRightTarget::C => self.registers.c,
-            RotateRightTarget::D => self.registers.d,
-            RotateRightTarget::E => self.registers.e,
-            RotateRightTarget::H => self.registers.h,
-            RotateRightTarget::L => self.registers.l,
-            RotateRightTarget::HL => {
+            ArithmeticTarget::A => self.registers.a,
+            ArithmeticTarget::B => self.registers.b,
+            ArithmeticTarget::C => self.registers.c,
+            ArithmeticTarget::D => self.registers.d,
+            ArithmeticTarget::E => self.registers.e,
+            ArithmeticTarget::H => self.registers.h,
+            ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
-                value = self.bus.read_byte(address); // Read the value from memory.
-                value
-            }
+                self.bus.read_byte(address) // Read the value from memory.
+            },
+            _ => todo!(),
         };
 
         // Extract the rightmost bit and store it as the new carry.
@@ -1659,17 +1759,18 @@ impl CPU {
 
         // Update the register or memory with the new value.
         match target {
-            RotateRightTarget::A => self.registers.a = value,
-            RotateRightTarget::B => self.registers.b = value,
-            RotateRightTarget::C => self.registers.c = value,
-            RotateRightTarget::D => self.registers.d = value,
-            RotateRightTarget::E => self.registers.e = value,
-            RotateRightTarget::H => self.registers.h = value,
-            RotateRightTarget::L => self.registers.l = value,
-            RotateRightTarget::HL => {
+            ArithmeticTarget::A => self.registers.a = value,
+            ArithmeticTarget::B => self.registers.b = value,
+            ArithmeticTarget::C => self.registers.c = value,
+            ArithmeticTarget::D => self.registers.d = value,
+            ArithmeticTarget::E => self.registers.e = value,
+            ArithmeticTarget::H => self.registers.h = value,
+            ArithmeticTarget::L => self.registers.l = value,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
-            }
+            },
+            _ => todo!(),
         }
 
         // Update the flags.
@@ -1679,20 +1780,20 @@ impl CPU {
         self.registers.f.carry = carry;
     }
 
-    fn execute_rlc(&mut self, target: RotateLeftTarget) {
+    fn execute_rlc(&mut self, target: ArithmeticTarget) {
         let mut value = match target {
-            RotateLeftTarget::A => self.registers.a,
-            RotateLeftTarget::B => self.registers.b,
-            RotateLeftTarget::C => self.registers.c,
-            RotateLeftTarget::D => self.registers.d,
-            RotateLeftTarget::E => self.registers.e,
-            RotateLeftTarget::H => self.registers.h,
-            RotateLeftTarget::L => self.registers.l,
-            RotateLeftTarget::HL => {
+            ArithmeticTarget::A => self.registers.a,
+            ArithmeticTarget::B => self.registers.b,
+            ArithmeticTarget::C => self.registers.c,
+            ArithmeticTarget::D => self.registers.d,
+            ArithmeticTarget::E => self.registers.e,
+            ArithmeticTarget::H => self.registers.h,
+            ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
-                value = self.bus.read_byte(address); // Read the value from memory.
-                value
-            }
+                self.bus.read_byte(address) // Read the value from memory.
+            },
+            _ => todo!(),
         };
 
         // Extract the leftmost bit and store it as the new carry.
@@ -1706,17 +1807,18 @@ impl CPU {
 
         // Update the register or memory with the new value.
         match target {
-            RotateLeftTarget::A => self.registers.a = value,
-            RotateLeftTarget::B => self.registers.b = value,
-            RotateLeftTarget::C => self.registers.c = value,
-            RotateLeftTarget::D => self.registers.d = value,
-            RotateLeftTarget::E => self.registers.e = value,
-            RotateLeftTarget::H => self.registers.h = value,
-            RotateLeftTarget::L => self.registers.l = value,
-            RotateLeftTarget::HL => {
+            ArithmeticTarget::A => self.registers.a = value,
+            ArithmeticTarget::B => self.registers.b = value,
+            ArithmeticTarget::C => self.registers.c = value,
+            ArithmeticTarget::D => self.registers.d = value,
+            ArithmeticTarget::E => self.registers.e = value,
+            ArithmeticTarget::H => self.registers.h = value,
+            ArithmeticTarget::L => self.registers.l = value,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
-            }
+            },
+            _ => todo!(),
         }
 
         // Update the flags.
@@ -1726,20 +1828,20 @@ impl CPU {
         self.registers.f.carry = carry;
     }
 
-    fn execute_sra(&mut self, target: ShiftRightArithmeticTarget) {
+    fn execute_sra(&mut self, target: ArithmeticTarget) {
         let mut value = match target {
-            ShiftRightArithmeticTarget::A => self.registers.a,
-            ShiftRightArithmeticTarget::B => self.registers.b,
-            ShiftRightArithmeticTarget::C => self.registers.c,
-            ShiftRightArithmeticTarget::D => self.registers.d,
-            ShiftRightArithmeticTarget::E => self.registers.e,
-            ShiftRightArithmeticTarget::H => self.registers.h,
-            ShiftRightArithmeticTarget::L => self.registers.l,
-            ShiftRightArithmeticTarget::HL => {
+            ArithmeticTarget::A => self.registers.a,
+            ArithmeticTarget::B => self.registers.b,
+            ArithmeticTarget::C => self.registers.c,
+            ArithmeticTarget::D => self.registers.d,
+            ArithmeticTarget::E => self.registers.e,
+            ArithmeticTarget::H => self.registers.h,
+            ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
-                value = self.bus.read_byte(address); // Read the value from memory.
-                value
-            }
+                self.bus.read_byte(address) // Read the value from memory.
+            },
+            _ => todo!(),
         };
 
         // Extract the rightmost bit and store it as the new carry.
@@ -1751,17 +1853,18 @@ impl CPU {
 
         // Update the register or memory with the new value.
         match target {
-            ShiftRightArithmeticTarget::A => self.registers.a = value,
-            ShiftRightArithmeticTarget::B => self.registers.b = value,
-            ShiftRightArithmeticTarget::C => self.registers.c = value,
-            ShiftRightArithmeticTarget::D => self.registers.d = value,
-            ShiftRightArithmeticTarget::E => self.registers.e = value,
-            ShiftRightArithmeticTarget::H => self.registers.h = value,
-            ShiftRightArithmeticTarget::L => self.registers.l = value,
-            ShiftRightArithmeticTarget::HL => {
+            ArithmeticTarget::A => self.registers.a = value,
+            ArithmeticTarget::B => self.registers.b = value,
+            ArithmeticTarget::C => self.registers.c = value,
+            ArithmeticTarget::D => self.registers.d = value,
+            ArithmeticTarget::E => self.registers.e = value,
+            ArithmeticTarget::H => self.registers.h = value,
+            ArithmeticTarget::L => self.registers.l = value,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
-            }
+            },
+            _ => todo!(),
         }
 
         // Update the flags.
@@ -1771,20 +1874,20 @@ impl CPU {
         self.registers.f.carry = carry;
     }
 
-    fn execute_sla(&mut self, target: ShiftLeftArithmeticTarget) {
+    fn execute_sla(&mut self, target: ArithmeticTarget) {
         let mut value = match target {
-            ShiftLeftArithmeticTarget::A => self.registers.a,
-            ShiftLeftArithmeticTarget::B => self.registers.b,
-            ShiftLeftArithmeticTarget::C => self.registers.c,
-            ShiftLeftArithmeticTarget::D => self.registers.d,
-            ShiftLeftArithmeticTarget::E => self.registers.e,
-            ShiftLeftArithmeticTarget::H => self.registers.h,
-            ShiftLeftArithmeticTarget::L => self.registers.l,
-            ShiftLeftArithmeticTarget::HL => {
+            ArithmeticTarget::A => self.registers.a,
+            ArithmeticTarget::B => self.registers.b,
+            ArithmeticTarget::C => self.registers.c,
+            ArithmeticTarget::D => self.registers.d,
+            ArithmeticTarget::E => self.registers.e,
+            ArithmeticTarget::H => self.registers.h,
+            ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
-                value = self.bus.read_byte(address); // Read the value from memory.
-                value
-            }
+                self.bus.read_byte(address) // Read the value from memory.
+            },
+            _ => todo!(),
         };
 
         // Extract the leftmost bit and store it as the new carry.
@@ -1795,17 +1898,18 @@ impl CPU {
 
         // Update the register or memory with the new value.
         match target {
-            ShiftLeftArithmeticTarget::A => self.registers.a = value,
-            ShiftLeftArithmeticTarget::B => self.registers.b = value,
-            ShiftLeftArithmeticTarget::C => self.registers.c = value,
-            ShiftLeftArithmeticTarget::D => self.registers.d = value,
-            ShiftLeftArithmeticTarget::E => self.registers.e = value,
-            ShiftLeftArithmeticTarget::H => self.registers.h = value,
-            ShiftLeftArithmeticTarget::L => self.registers.l = value,
-            ShiftLeftArithmeticTarget::HL => {
+            ArithmeticTarget::A => self.registers.a = value,
+            ArithmeticTarget::B => self.registers.b = value,
+            ArithmeticTarget::C => self.registers.c = value,
+            ArithmeticTarget::D => self.registers.d = value,
+            ArithmeticTarget::E => self.registers.e = value,
+            ArithmeticTarget::H => self.registers.h = value,
+            ArithmeticTarget::L => self.registers.l = value,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
-            }
+            },
+            _ => todo!(),
         }
 
         // Update the flags.
@@ -1815,20 +1919,20 @@ impl CPU {
         self.registers.f.carry = carry;
     }
 
-    fn execute_swap(&mut self, target: SwapTarget) {
+    fn execute_swap(&mut self, target: ArithmeticTarget) {
         let mut value = match target {
-            SwapTarget::A => self.registers.a,
-            SwapTarget::B => self.registers.b,
-            SwapTarget::C => self.registers.c,
-            SwapTarget::D => self.registers.d,
-            SwapTarget::E => self.registers.e,
-            SwapTarget::H => self.registers.h,
-            SwapTarget::L => self.registers.l,
-            SwapTarget::HL => {
+            ArithmeticTarget::A => self.registers.a,
+            ArithmeticTarget::B => self.registers.b,
+            ArithmeticTarget::C => self.registers.c,
+            ArithmeticTarget::D => self.registers.d,
+            ArithmeticTarget::E => self.registers.e,
+            ArithmeticTarget::H => self.registers.h,
+            ArithmeticTarget::L => self.registers.l,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
-                value = self.bus.read_byte(address); // Read the value from memory.
-                value
-            }
+                self.bus.read_byte(address) // Read the value from memory.
+            },
+            _ => todo!(),
         };
 
         // Perform the swap of the upper and lower nibbles.
@@ -1838,17 +1942,18 @@ impl CPU {
 
         // Update the register or memory with the new value.
         match target {
-            SwapTarget::A => self.registers.a = value,
-            SwapTarget::B => self.registers.b = value,
-            SwapTarget::C => self.registers.c = value,
-            SwapTarget::D => self.registers.d = value,
-            SwapTarget::E => self.registers.e = value,
-            SwapTarget::H => self.registers.h = value,
-            SwapTarget::L => self.registers.l = value,
-            SwapTarget::HL => {
+            ArithmeticTarget::A => self.registers.a = value,
+            ArithmeticTarget::B => self.registers.b = value,
+            ArithmeticTarget::C => self.registers.c = value,
+            ArithmeticTarget::D => self.registers.d = value,
+            ArithmeticTarget::E => self.registers.e = value,
+            ArithmeticTarget::H => self.registers.h = value,
+            ArithmeticTarget::L => self.registers.l = value,
+            ArithmeticTarget::HL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
-            }
+            },
+            _ => todo!(),
         }
 
         // Update the flags.
@@ -1891,21 +1996,14 @@ impl CPU {
             let description = format!("0x{}{:x}", if prefixed { "cb" } else { "" }, instruction_byte);
             panic!("Unkown instruction found for: {}", description)
         };
-
-        self.pc = next_pc;
     }
 
     fn jump(&self, should_jump: bool) -> u16 {
         if should_jump {
-            // Gameboy is little endian so read pc + 2 as most significant bit
-            // and pc + 1 as least significant bit
             let least_significant_byte = self.bus.read_byte(self.pc + 1) as u16;
             let most_significant_byte = self.bus.read_byte(self.pc + 2) as u16;
             (most_significant_byte << 8) | least_significant_byte
         } else {
-            // If we don't jump we need to still move the program
-            // counter forward by 3 since the jump instruction is
-            // 3 bytes wide (1 byte for tag and 2 bytes for jump address)
             self.pc.wrapping_add(3)
         }
     }
@@ -1920,18 +2018,18 @@ impl CPU {
         }
     }
 
-    fn jr(&mut self, condition: bool, offset: i8) {
+    fn jump_relative(&mut self, condition: bool) {
         if condition {
-            let new_pc = ((self.registers.pc as i32) + offset as i32) as u16;
-            self.registers.pc = new_pc;
+            let new_pc = ((self.pc as i32) + self.read_next_byte() as i32) as u16;
+            self.pc = new_pc;
         } else {
-            // Si la condition n'est pas satisfaite, ne rien faire.
+            self.pc = self.pc.wrapping_add(2);
         }
     }
 
-    fn jpi(&mut self) {
+    fn jump_indirect(&mut self) {
         let address = self.registers.get_hl(); // Obtenir la valeur de HL (adresse à sauter)
-        self.registers.pc = address; // Copier l'adresse dans le PC
+        self.pc = address; // Copier l'adresse dans le PC
     }
     fn return_(&mut self, should_jump: bool) -> u16 {
         if should_jump {
@@ -1940,7 +2038,7 @@ impl CPU {
             self.pc.wrapping_add(1)
         }
     }
-
+/*
     fn reti(&mut self) {
         // Activer les interruptions en définissant IME sur 1.
         self.registers.ime = true;
@@ -1952,7 +2050,7 @@ impl CPU {
         self.registers.pc = new_pc;
     }
 
-    /*fn stop(&mut self) {
+    fn stop(&mut self) {
         // Mettez en pause ou désactivez les horloges du système et les horloges principales ici.
         // La logique exacte dépendra de la manière dont votre émulateur gère les horloges.
 

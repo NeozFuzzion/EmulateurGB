@@ -1,3 +1,5 @@
+mod instructions;
+
 struct Registers {
     a: u8,
     b: u8,
@@ -120,6 +122,18 @@ impl Registers {
     fn set_af(&mut self, value: u16) {
         self.a = ((value & 0xFF00) >> 8) as u8;
         self.f = FlagsRegister::from(value as u8).clone();
+    }
+
+    fn get_hlm(&self) -> u16 {
+        let res = self.get_hl();
+        self.set_hl(res.wrapping_sub(1));
+        res
+    }
+
+    fn get_hlp(&mut self) -> u16 {
+        let res = self.get_hl();
+        self.set_hl(res.wrapping_add(1));
+        res
     }
 }
 

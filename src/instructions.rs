@@ -785,14 +785,14 @@ impl Instruction {
 impl CPU {
 
     fn read_next_byte(&mut self) -> u8 {
-        self.pc += 1;
-        let byte = self.bus.read_byte(self.pc);
+        //self.pc += 1;
+        let byte = self.bus.read_byte(self.pc+1);
         byte
     }
 
     fn read_next_word(&mut self) -> u16 {
-        self.pc += 2;
-        let word = self.bus.read_word(self.pc);
+        //self.pc += 2;
+        let word = self.bus.read_word(self.pc+2);
         word
     }
 
@@ -1072,12 +1072,58 @@ impl CPU {
                             LoadByteTarget::AddressHLP =>self.bus.write_byte(self.registers.get_hlp(), source_value),
                             LoadByteTarget::AddressHLM => self.bus.write_byte(self.registers.get_hlm(), source_value),
                             LoadByteTarget::AddressC => self.bus.write_byte(0xFF00 | (self.registers.c as u16) , source_value),
+
                             _ => { panic!("TODO: implement other targets") }
                         };
                         match (source, target) {
                             (LoadByteSource::D8, _)
                             | (LoadByteSource::A, LoadByteTarget::AddressC)
                             | (LoadByteSource::AddressC, LoadByteTarget::A) => {
+                                self.pc+2
+                            }
+                            _ => {
+                                self.pc+1
+                            }
+                        }
+                    }
+                    LoadType::Word(target, source) => {
+
+                        let source_value = match source {
+                            LoadWordSource::D16 => {
+                                let val = self.read_next_word();
+                                self.pc+=2;
+                                val
+                            },
+                            LoadWordSource::HL => self.registers.get_hl(),
+                            LoadWordSource::SP => self.sp,
+                            LoadWordSource::SPR8 => {
+                                let r8 = (self.read_next_byte() as i8 as i32);
+                                let sp = self.sp as i32;
+                                let res = sp.wrapping_add(r8);
+
+                                self.registers.f.zero=false;
+                                self.registers.f.subtract=false;
+                                self.registers.f.half_carry= (sp ^ r8 ^ res) & 0x10 != 0;
+                                self.registers.f.carry= (sp ^ r8 ^ res) & 0x100 != 0;
+                                res as u16
+                            }
+                            _ => { panic!("TODO: implement other sources") }
+                        };
+                        match target {
+                            LoadWordTarget::BC => self.registers.set_bc(source_value),
+                            LoadWordTarget::DE => self.registers.set_de(source_value),
+                            LoadWordTarget::HL => self.registers.set_hl(source_value),
+                            LoadWordTarget::SP => self.sp = source_value,
+                            LoadWordTarget::Address16 => {
+                                let address = self.read_next_word();
+                                self.bus.write_word(address, source_value) },
+                            _ => { panic!("TODO: implement other targets") }
+                        };
+                        match (source, target) {
+                            (LoadWordSource::HL,LoadWordTarget::SP) => {
+                                self.pc
+                            },
+                            (LoadWordSource::SPR8,LoadWordTarget::HL) => {
                                 self.pc+2
                             }
                             _ => {
@@ -1170,8 +1216,7 @@ impl CPU {
                     JumpTest::Carry => self.registers.f.carry,
                     JumpTest::Always => true,
                 };
-                self.jump(jump_condition,ju);
-                self.pc
+                self.jump(jump_condition,ju)
             }
 
             Instruction::JR(test) => {
@@ -1476,6 +1521,7 @@ impl CPU {
             ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
             _ => todo!(),
+
         };
 
         let result = self.registers.a ^ value;
@@ -1486,7 +1532,6 @@ impl CPU {
         self.registers.f.subtract = false;
         self.registers.f.half_carry = false; // Half Carry est toujours défini sur false dans l'opération XOR.
         self.registers.f.carry = false; // Carry est toujours défini sur false dans l'opération XOR.
-
         match target {
             ArithmeticTarget::D8 => self.pc+2,
             _ => self.pc+1,
@@ -1517,7 +1562,7 @@ impl CPU {
         self.registers.f.half_carry = (self.registers.a & 0x0F) < (value & 0x0F);
         self.registers.f.carry = did_underflow;
         match target {
-            ArithmeticTarget::D8 => self.pc+1,
+            ArithmeticTarget::D8 => self.pc+2,
             _ => self.pc,
         }
     }
@@ -2230,7 +2275,7 @@ impl CPU {
             let description = format!("0x{}{:x}", if prefixed { "cb" } else { "" }, instruction_byte);
             panic!("Unkown instruction found for: {}", description)
         };
-
+        print!(" NEXT : 0x{:0X} ", next_pc);
         self.pc = next_pc;
         
     }
@@ -2241,6 +2286,7 @@ impl CPU {
                 if should_jump {
                     let least_significant_byte = self.bus.read_byte(self.pc + 1) as u16;
                     let most_significant_byte = self.bus.read_byte(self.pc + 2) as u16;
+                    print!("0x{:0X} ",(most_significant_byte << 8) | least_significant_byte);
                     (most_significant_byte << 8) | least_significant_byte
                 } else {
                     self.pc.wrapping_add(3)
@@ -2264,7 +2310,8 @@ impl CPU {
 
     fn jump_relative(&mut self, condition: bool) {
         if condition {
-            let new_pc = ((self.pc as i32) + self.read_next_byte() as i32) as u16;
+
+            let new_pc = ((self.pc as i32) + (self.read_next_byte() as i8) as i32) as u16;
             self.pc = new_pc;
         } else {
             self.pc = self.pc.wrapping_add(2);

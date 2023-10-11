@@ -141,7 +141,7 @@ fn main() {
         l: 0,
     };
     
-    let mut input_file = File::open("/home/cytech/pkmn_red.gb").expect("gameboy rom file");
+    let mut input_file = File::open("F:/Prog/Pokemon.gb").expect("gameboy rom file");
     let mut bytes = [0;0xFFFF];
     input_file.read(&mut bytes).expect("read bytes from file");
     let mut cpu = instructions::CPU{

@@ -2310,8 +2310,9 @@ impl CPU {
 
     fn jump_relative(&mut self, condition: bool) {
         if condition {
-
-            let new_pc = ((self.pc as i32) + (self.read_next_byte() as i8) as i32) as u16;
+            let r8=(self.read_next_byte() as i8);
+            println!("{}",r8);
+            let new_pc = ((self.pc as i32) + 2 + r8 as i32) as u16;
             self.pc = new_pc;
         } else {
             self.pc = self.pc.wrapping_add(2);

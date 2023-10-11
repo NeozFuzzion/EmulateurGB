@@ -1,3 +1,7 @@
+use std::fs::File;
+use std::io::{Write, Seek, SeekFrom, Read};
+use std::fs::OpenOptions;
+
 mod instructions;
 
 struct Registers {
@@ -11,12 +15,6 @@ struct Registers {
     l: u8,
 }
 
-struct CPU {
-    registers: Registers,
-    pc: u16,
-   // bus: MemoryBus,
-    sp: u16
-}
 
 struct MemoryBus {
     memory: [u8; 0xFFFF]
@@ -35,17 +33,6 @@ enum JumpTest {
     Carry,
     Always
 }
-
-
-enum Instruction {
-    SUB(ArithmeticTarget),
-}
-
-enum ArithmeticTarget {
-    A, B, C, D, E, H, L, HL, AF, BC, DE, SP,
-}
-
-enum StackTarget {AF, HL , BC, DE }
 
 
 #[derive(Clone)]
@@ -124,7 +111,7 @@ impl Registers {
         self.f = FlagsRegister::from(value as u8).clone();
     }
 
-    fn get_hlm(&self) -> u16 {
+    fn get_hlm(&mut self) -> u16 {
         let res = self.get_hl();
         self.set_hl(res.wrapping_sub(1));
         res
@@ -137,38 +124,6 @@ impl Registers {
     }
 }
 
-
-impl CPU {
-    fn execute(&mut self, instruction: Instruction) {
-        match instruction {
-            Instruction::SUB(target) => self.execute_sub(target),
-        }
-    }
-
-    fn execute_sub(&mut self, target: ArithmeticTarget) {
-        let value = match target {
-            ArithmeticTarget::A => self.registers.a,
-            ArithmeticTarget::B => self.registers.b,
-            ArithmeticTarget::C => self.registers.c,
-            ArithmeticTarget::D => self.registers.d,
-            ArithmeticTarget::E => self.registers.e,
-            ArithmeticTarget::H => self.registers.h,
-            ArithmeticTarget::L => self.registers.l,
-            _ => todo!(),
-
-            // TODO HL d8
-        };
-        let (new_value, did_overflow) = self.registers.a.overflowing_sub(value);
-
-        self.registers.f.zero = new_value == 0;
-        self.registers.f.subtract = true;
-        self.registers.f.carry = did_overflow;
-        self.registers.f.half_carry = (self.registers.a & 0x0F) < (value & 0x0F);
-
-        self.registers.a = new_value;
-    }
-
-}
 fn main() {
     let reg=Registers{
         a: 50,
@@ -185,17 +140,32 @@ fn main() {
         h: 0,
         l: 0,
     };
-
-    let mut cpu = CPU{
+    
+    let mut input_file = File::open("/home/cytech/pkmn_red.gb").expect("gameboy rom file");
+    let mut bytes = [0;0xFFFF];
+    input_file.read(&mut bytes).expect("read bytes from file");
+    let mut cpu = instructions::CPU{
         registers: reg,
-        pc: 0,
-        //bus: MemoryBus {},
-        sp: 0,
+        pc: 0x0150,
+        bus: instructions::MemoryBus{ memory: bytes },
+        sp: 0xFFFE,
+        interrupt_enable_flag: false,
+        halt: false,
+        ei: 0,
+        di: 0
     };
 
-    println!("{:} {:} {:}",cpu.registers.a, cpu.registers.d,u8::from(cpu.registers.f.clone()));
-    cpu.execute(Instruction::SUB(ArithmeticTarget::D));
-    println!("{:} {:} {:} {:} {:} {:} {:}",cpu.registers.a, cpu.registers.d,u8::from(cpu.registers.f.clone()), cpu.registers.f.zero, cpu.registers.f.subtract, cpu.registers.f.half_carry, cpu.registers.f.carry);
+    // Créez ou ouvrez le fichier de sortie pour écriture
+    let mut output_file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open("output3.txt")
+        .expect("output file");
+
+    for _i in 1..100 {
+        cpu.step();
+    }
+    
 
 
 }

@@ -126,13 +126,13 @@ impl Registers {
 
 fn main() {
     let reg=Registers{
-        a: 50,
-        b: 7,
+        a: 0,
+        b: 0,
         c: 0,
-        d: 30,
-        e: 2,
+        d: 0,
+        e: 0,
         f: FlagsRegister {
-            zero: false,
+            zero: true,
             subtract: false,
             half_carry: false,
             carry: false,
@@ -141,7 +141,7 @@ fn main() {
         l: 0,
     };
     
-    let mut input_file = File::open("F:/Prog/Tetris.gb").expect("gameboy rom file");
+    let mut input_file = File::open("/home/cytech/Zelda.gb").expect("gameboy rom file");
     let mut bytes = [0;0xFFFF];
     input_file.read(&mut bytes).expect("read bytes from file");
     let mut cpu = instructions::CPU{

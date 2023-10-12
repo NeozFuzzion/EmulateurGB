@@ -792,7 +792,7 @@ impl CPU {
 
     fn read_next_word(&mut self) -> u16 {
         //self.pc += 2;
-        let word = self.bus.read_word(self.pc+2);
+        let word = self.bus.read_word(self.pc+1);
         word
     }
 
@@ -1056,6 +1056,10 @@ impl CPU {
                             LoadByteSource::AddressC => self.bus.read_byte(0xFF00 | (self.registers.c as u16)),
                             LoadByteSource::D8 => self.read_next_byte(),
                             LoadByteSource::AddressHL => self.bus.read_byte(self.registers.get_hl()),
+                            LoadByteSource::Address16 => {
+                                let address = self.read_next_word();
+                                self.bus.read_byte(address)
+                            }
                             _ => { panic!("TODO: implement other sources") }
                         };
                         match target {
@@ -1072,7 +1076,10 @@ impl CPU {
                             LoadByteTarget::AddressHLP =>self.bus.write_byte(self.registers.get_hlp(), source_value),
                             LoadByteTarget::AddressHLM => self.bus.write_byte(self.registers.get_hlm(), source_value),
                             LoadByteTarget::AddressC => self.bus.write_byte(0xFF00 | (self.registers.c as u16) , source_value),
-
+                            LoadByteTarget::Address16 => {
+                                let address = self.read_next_word();
+                                self.bus.write_byte(address,source_value);
+                            } 
                             _ => { panic!("TODO: implement other targets") }
                         };
                         match (source, target) {
@@ -1080,6 +1087,10 @@ impl CPU {
                             | (LoadByteSource::A, LoadByteTarget::AddressC)
                             | (LoadByteSource::AddressC, LoadByteTarget::A) => {
                                 self.pc+2
+                            }
+                            (LoadByteSource::Address16, LoadByteTarget::A)
+                            | (LoadByteSource::A, LoadByteTarget::Address16) => {
+                                self.pc+3
                             }
                             _ => {
                                 self.pc+1
@@ -1142,7 +1153,8 @@ impl CPU {
                         let source_value = match source {
                             LoadByteSource::A => self.registers.a,
                             LoadByteSource::Address8 => {
-                                let address = 0xFF00 | (self.read_next_byte() as u16);
+                                let address = self.read_next_byte() as u16;
+                                
                                 self.bus.read_byte(address)
                             },
                             _ => { panic!("TODO: implement other sources") }
@@ -1150,7 +1162,7 @@ impl CPU {
                         match target {
                             LoadByteTarget::A => self.registers.a = source_value,
                             LoadByteTarget::Address8 => {
-                                let address = 0xFF00 | (self.read_next_byte() as u16);
+                                let address = self.read_next_byte() as u16;
                                 self.bus.write_byte( address, source_value)
                             },
                             _ => { panic!("TODO: implement other targets") }
@@ -1191,10 +1203,12 @@ impl CPU {
             Instruction::CALL(test, target) => {
                 let jump_condition = match test {
                     JumpTest::NotZero => !self.registers.f.zero,
-                    _ => { panic!("TODO: support more conditions") }
+                    JumpTest::NotCarry => !self.registers.f.carry,
+                    JumpTest::Zero => self.registers.f.zero,
+                    JumpTest::Carry => self.registers.f.carry,
+                    JumpTest::Always => true,
                 };
-                self.call(jump_condition);
-                self.pc+3
+                self.call(jump_condition)
             }
 
             Instruction::RET(test) => {
@@ -1527,7 +1541,7 @@ impl CPU {
         let result = self.registers.a ^ value;
 
         self.registers.a = result;
-
+        
         self.registers.f.zero = result == 0;
         self.registers.f.subtract = false;
         self.registers.f.half_carry = false; // Half Carry est toujours défini sur false dans l'opération XOR.
@@ -1554,10 +1568,10 @@ impl CPU {
             //d8 readnextbyte
         };
 
-        let (_result, did_underflow) = self.registers.a.overflowing_sub(value);
+        let (res, did_underflow) = self.registers.a.overflowing_sub(value);
 
         // Le résultat de la soustraction n'est pas stocké, seulement les drapeaux sont mis à jour.
-        self.registers.f.zero = did_underflow;
+        self.registers.f.zero = res==0;
         self.registers.f.subtract = true;
         self.registers.f.half_carry = (self.registers.a & 0x0F) < (value & 0x0F);
         self.registers.f.carry = did_underflow;
@@ -2275,7 +2289,7 @@ impl CPU {
             let description = format!("0x{}{:x}", if prefixed { "cb" } else { "" }, instruction_byte);
             panic!("Unkown instruction found for: {}", description)
         };
-        print!(" NEXT : 0x{:0X} ", next_pc);
+        print!(" NEXT : 0x{:0X} | A : {} |", next_pc,self.registers.a);
         self.pc = next_pc;
         
     }
@@ -2309,8 +2323,9 @@ impl CPU {
     }
 
     fn jump_relative(&mut self, condition: bool) {
+        println!("cond : {}",condition);
         if condition {
-            let r8=(self.read_next_byte() as i8);
+            let r8=self.read_next_byte() as i8;
             println!("{}",r8);
             let new_pc = ((self.pc as i32) + 2 + r8 as i32) as u16;
             self.pc = new_pc;

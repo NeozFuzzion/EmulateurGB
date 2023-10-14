@@ -391,7 +391,7 @@ impl CPU {
                         match target {
                             LoadByteTarget::A => self.registers.a = source_value,
                             LoadByteTarget::Address8 => {
-                                let address = self.read_next_byte() as u16;
+                                let address =  0xFF00 | self.read_next_byte() as u16;
                                 self.bus.write_byte( address, source_value)
                             },
                             _ => { panic!("TODO: implement other targets") }
@@ -1534,8 +1534,7 @@ impl CPU {
             panic!("Unkown instruction found for: {}", description)
         };
         self.pc = next_pc;
-        
-        
+
     }
 
     pub fn jump(&self, should_jump: bool, ju : JumpCondition) -> u16 {

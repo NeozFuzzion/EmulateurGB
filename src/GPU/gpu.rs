@@ -35,4 +35,22 @@ impl GPU {
             _ => panic!("Unknown GPU control read operation: 0x{:X}", address),
         }
     }
+
+    pub fn write_lcd_reg(&mut self, address:u16, value: u8){
+        match address {
+            0xFF40 => self.lcdc=value,
+            0xFF41 => self.stat=value,
+            0xFF42 => self.scy=value,
+            0xFF43 => self.scx=value,
+            0xFF44 =>  self.ly=value,
+            0xFF45 => self.lyc=value,
+
+            0xFF47 => self.bgp=value,
+            0xFF48 => self.obp0=value,
+            0xFF49 => self.obp1=value,
+            0xFF4A => self.wy=value,
+            0xFF4B => self.wx=value,
+            _ => panic!("Unknown GPU control read operation: 0x{:X}", address),
+        }
+    }
 }

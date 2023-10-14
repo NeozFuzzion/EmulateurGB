@@ -17,15 +17,15 @@ impl MemoryBus {
         println!("{:x}",address);
         match address {
             0x0000..=0x7FFF | 0xA000..=0xBFFF => self.memory[address as usize], // ROM and cart RAM
-            0x8000..=0x9FFF => panic!("GPU"),             // Load from GPU
+            0x8000..=0x9FFF => panic!("RGPU"),             // Load from GPU
             0xC000..=0xFDFF => self.wram[(address & 0x1FFF) as usize],        // Working RAM
-            0xFE00..=0xFE9F => panic!("GPU"),                    // Graphics - sprite information
-            0xFF00 => panic!("Input"),                                   // Input read
-            0xFF01..=0xFF02 => panic!("Serial"),                     // Serial read
-            0xFF04..=0xFF07 => panic!("Clock"),                 // read Clock values
+            0xFE00..=0xFE9F => panic!("RGPU"),                    // Graphics - sprite information
+            0xFF00 => panic!("RInput"),                                   // Input read
+            0xFF01..=0xFF02 => panic!("RSerial"),                     // Serial read
+            0xFF04..=0xFF07 => panic!("RClock"),                 // read Clock values
             0xFF0F => self.interrupt_flags,                                // Interrupt flags
-            0xFF10..=0xFF26 => panic!("Sound"),                 // Sound control
-            0xFF30..=0xFF3F => panic!("Sound"),                 // Sound wave pattern RAM
+            0xFF10..=0xFF26 => panic!("RSound"),                 // Sound control
+            0xFF30..=0xFF3F => panic!("RSound"),                 // Sound wave pattern RAM
             0xFF40..=0xFF4B => self.gpu.read_lcd_reg(address),
             0xFF4C..=0xFF7F => panic!("MMU ERROR: Memory mapped I/O (read) (CGB only) not implemented"),
             0xFF80..=0xFFFE => self.hram[(address & 0x7F) as usize], // High RAM
@@ -34,26 +34,26 @@ impl MemoryBus {
         }
     }
 
-    pub fn write_byte(&mut self, addr: u16, byte: u8) {
-        println!("{}",addr);
-        match addr {
-            0x0000..=0x7FFF | 0xA000..=0xBFFF => self.memory[addr as usize]=byte, // ROM and cart RAM
-            0x8000..=0x9FFF => panic!("GPU"),              // Write to GPU
-            0xC000..=0xFDFF => self.wram[(addr & 0x1FFF) as usize] = byte,        // Working RAM
-            0xFE00..=0xFE9F => panic!("GPU"),                    // Graphics - sprite information
-            0xFF00 => panic!("Input"),                                     // Input write
-            0xFF01..=0xFF02 => panic!("Serial"),                     // Serial write
-            0xFF04..=0xFF07 => panic!("Clock"),                 // write Clock values
+    pub fn write_byte(&mut self, address: u16, byte: u8) {
+        println!("{:x}",address);
+        match address {
+            0x0000..=0x7FFF | 0xA000..=0xBFFF => self.memory[address as usize]=byte, // ROM and cart RAM
+            0x8000..=0x9FFF => panic!("WGPU"),              // Write to GPU
+            0xC000..=0xFDFF => self.wram[(address & 0x1FFF) as usize] = byte,        // Working RAM
+            0xFE00..=0xFE9F => panic!("WGPU"),                    // Graphics - sprite information
+            0xFF00 => panic!("WInput"),                                     // Input write
+            0xFF01..=0xFF02 => panic!("WSerial"),                     // Serial write
+            0xFF04..=0xFF07 => panic!("WClock"),                 // write Clock values
             0xFF0F => self.interrupt_flags = byte,                                // Interrupt flags
-            0xFF10..=0xFF26 => panic!("Sound"),                 // Sound control
-            0xFF30..=0xFF3F => panic!("Sound"),                 // Sound wave pattern RAM
-            0xFF46 => panic!("sprite"),
-            0xFF40..=0xFF45 | 0xFF47..=0xFF4B => panic!("GPU"),
+            //0xFF10..=0xFF26 => panic!("WSound"),                 // Sound control
+            //0xFF30..=0xFF3F => panic!("WSound"),                 // Sound wave pattern RAM
+            0xFF46 => panic!("Rsprite"),
+            0xFF40..=0xFF45 | 0xFF47..=0xFF4B => self.gpu.write_lcd_reg(address,byte),
             /*0xFF4C..=0xFF7F => panic!(
                 "MMU ERROR: Memory mapped I/O (write) (CGB only) not implemented. Addr: 0x{:X}",
                 addr
             ),*/
-            0xFF80..=0xFFFE => self.hram[(addr & 0x7F) as usize] = byte, // High RAM
+            0xFF80..=0xFFFE => self.hram[(address & 0x7F) as usize] = byte, // High RAM
             0xFFFF => self.interrupt_enabled = byte,                     // Interrupt enable
             _ => (),
         }

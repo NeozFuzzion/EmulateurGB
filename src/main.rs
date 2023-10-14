@@ -21,7 +21,7 @@ mod GPU;
 fn main() {
     let reg=Registers ::new();
     
-    let mut input_file = File::open("/home/cytech/Tetris.gb").expect("gameboy rom file");
+    let mut input_file = File::open("F:/Prog/Tetris.gb").expect("gameboy rom file");
     let mut bytes = [0;0xFFFF];
     input_file.read(&mut bytes).expect("read bytes from file");
     /*let (screen_data_sender, screen_data_receiver) = mpsc::sync_channel(1);

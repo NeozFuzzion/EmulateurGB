@@ -109,7 +109,6 @@ impl Instruction {
 
 
     pub fn print_debug(byte: u8) {
-        print!("0x{:02X} ", byte);
         match byte {
             0x00 => println!("NOP"), 0x01 => println!("LD BC, d16"), 0x02 => println!("LD (BC), A"), 0x03 => println!("INC BC"), 0x04 => println!("INC B"), 0x05 => println!("DEC B"), 0x06 => println!("LD B, d8"), 0x07 => println!("RLCA"), 0x08 => println!("LD (a16), SP"), 0x09 => println!("ADD HL, BC"), 0x0A => println!("LD A, (BC)"), 0x0B => println!("DEC BC"), 0x0C => println!("INC C"), 0x0D => println!("DEC C"), 0x0E => println!("LD C, d8"), 0x0F => println!("RRCA"),
             0x10 => println!("STOP"), 0x11 => println!("LD DE, d16"), 0x12 => println!("LD (DE), A"), 0x13 => println!("INC DE"), 0x14 => println!("INC D"), 0x15 => println!("DEC D"), 0x16 => println!("LD D, d8"), 0x17 => println!("RLA"), 0x18 => println!("JR r8"), 0x19 => println!("ADD HL, DE"), 0x1A => println!("LD A, (DE)"), 0x1B => println!("DEC DE"), 0x1C => println!("INC E"), 0x1D => println!("DEC E"), 0x1E => println!("LD E, d8"), 0x1F => println!("RRA"),

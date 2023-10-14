@@ -1,64 +1,21 @@
-extern crate glutin;
+extern crate winit;
 
-use glutin::event::{Event, WindowEvent};
-use glutin::event_loop::{ControlFlow, EventLoop};
-use glutin::window::WindowBuilder;
-use glutin::ContextBuilder;
-use glutin::PossiblyCurrent;
-use glutin::NotCurrent;
-use glutin::Context;
+use winit::{
+    event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::WindowBuilder,
+};
 
-fn main() {
-    // Créez un event loop
-    let event_loop = EventLoop::new();
-
-    // Créez une fenêtre Glutin
-    let window_builder = WindowBuilder::new().with_title("Game Boy Emulator");
-    let context_builder = ContextBuilder::new()
-        .with_gl(glutin::GlRequest::Latest)
-        .with_vsync(true);
-
-    // Créez le contexte OpenGL
-    let context = unsafe {
-        let context = ContextBuilder::new()
-            .build_windowed(window_builder, &event_loop)
-            .unwrap();
-        let context = context.make_current().unwrap();
-        context
-    };
-
-    // Boucle principale
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Poll;
-
-        match event {
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
-                *control_flow = ControlFlow::Exit;
-            }
-            Event::RedrawRequested(_) => {
-                // Dessinez le contenu de votre émulateur Game Boy ici
-
-                // Swap buffers pour afficher le rendu
-                context.swap_buffers().unwrap();
-            }
-            _ => (),
-        }
-    });
-}
-
-
-
-/*use std::fs::File;
+use std::{fs::File, thread};
 use std::io::{Write, Seek, SeekFrom, Read};
 use std::fs::OpenOptions;
+use std::sync::mpsc;
 
 use CPU::registres::Registers;
 
 mod CPU;
 mod Memory;
+mod GPU;
 
 
 fn main() {
@@ -67,29 +24,79 @@ fn main() {
     let mut input_file = File::open("/home/cytech/Tetris.gb").expect("gameboy rom file");
     let mut bytes = [0;0xFFFF];
     input_file.read(&mut bytes).expect("read bytes from file");
+    /*let (screen_data_sender, screen_data_receiver) = mpsc::sync_channel(1);
+    let (screen_exit_sender, screen_exit_receiver) = mpsc::channel();
+    let (key_data_sender, key_data_receiver) = mpsc::channel();
+    let (throttled_state_sender, throttled_state_receiver) = mpsc::channel();*/
     let mut cpu = CPU::cpu::CPU{
         registers: reg,
         pc: 0x0100,
-        bus: Memory::memory::MemoryBus{ memory: bytes },
+        bus: Memory::memory::MemoryBus{ memory: bytes, interrupt_flags: 0, interrupt_enabled: 0, wram: [0_u8; 0x2000],  hram: [0_u8; 0x80], gpu: Default::default() },
         sp: 0xFFFE,
         halt: false,
-        ei: 0,
-        di: 0,
         interrupt_master_enable: false,
     };
-
     // Créez ou ouvrez le fichier de sortie pour écriture
     let mut output_file = OpenOptions::new()
         .write(true)
         .create(true)
         .open("output3.txt")
         .expect("output file");
+    let mut x = 1;
+    // Créez un event loop pour gérer les événements
+    let event_loop = EventLoop::new();
 
-    for _i in 1..100 {
-        cpu.step();
-    }
+    // Créez une fenêtre
+    let window = WindowBuilder::new()
+        .with_title("Affichage graphique en Rust")
+        .build(&event_loop)
+        .unwrap();
+
+    let cpu_thread = thread::spawn(move || {
+        loop {
+            cpu.step();
+            x+=1
+        }
+    });
+
+    
+    // Boucle principale
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Poll;
+        
+        match event {
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
+                *control_flow = ControlFlow::Exit;
+            }
+            Event::WindowEvent {
+                event: WindowEvent::KeyboardInput { input, .. },
+                ..
+            } => {
+                if let Some(key_code) = input.virtual_keycode {
+                    match key_code {
+                        VirtualKeyCode::Up => println!("Flèche vers le haut appuyée"),
+                        VirtualKeyCode::Down => println!("Flèche vers le bas appuyée"),
+                        VirtualKeyCode::Left => println!("Flèche vers la gauche appuyée"),
+                        VirtualKeyCode::Right => println!("Flèche vers la droite appuyée"),
+                        VirtualKeyCode::A => println!("Touche A appuyée"),
+                        VirtualKeyCode::B => println!("Touche B appuyée"),
+                        VirtualKeyCode::W => println!("Touche W appuyée"),
+                        VirtualKeyCode::X => println!("Touche X appuyée"),
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    });
+   
     
 
+    if let Err(e) = cpu_thread.join() {
+        panic!("Error: Failed to join CPU thread: {:?}", e);
+    }
 
 }
-*/

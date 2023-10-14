@@ -8,9 +8,7 @@ pub struct CPU {
     pub(crate) bus: MemoryBus,
     pub(crate) sp: u16,
     pub(crate) interrupt_master_enable: bool,
-    pub(crate) halt: bool,
-    pub(crate) ei: u32,
-    pub(crate) di: u32
+    pub(crate) halt: bool
 }
 
 impl CPU {
@@ -384,7 +382,7 @@ impl CPU {
                         let source_value = match source {
                             LoadByteSource::A => self.registers.a,
                             LoadByteSource::Address8 => {
-                                let address = self.read_next_byte() as u16;
+                                let address = 0xFF00 | (self.read_next_byte() as u16);
                                 
                                 self.bus.read_byte(address)
                             },
@@ -445,7 +443,10 @@ impl CPU {
             Instruction::RET(test) => {
                 let jump_condition = match test {
                     JumpTest::NotZero => !self.registers.f.zero,
-                    _ => { panic!("TODO: support more conditions") }
+                    JumpTest::NotCarry => !self.registers.f.carry,
+                    JumpTest::Zero => self.registers.f.zero,
+                    JumpTest::Carry => self.registers.f.carry,
+                    JumpTest::Always => true,
                 };
                 self.return_(jump_condition);
                 self.pc+1
@@ -483,7 +484,7 @@ impl CPU {
 
             Instruction::RETI => {
                 self.pc = self.pop();
-                self.ei = 1;
+                self.interrupt_master_enable = true;
                 self.pc + 1
             },
 
@@ -494,13 +495,11 @@ impl CPU {
 
             Instruction::EI => {
                 self.interrupt_master_enable=true;
-                self.ei  = 2;
                 self.pc + 1
             },
 
             Instruction::DI => {
                 self.interrupt_master_enable=false;
-                self.di  = 1;
                 self.pc + 1
             },
 
@@ -1507,6 +1506,19 @@ impl CPU {
         (msb << 8) | lsb
     }
 
+    /*pub fn prested(&mut self){
+        self.update_interrupt_counters();
+        let interrupt_cycles = self.jump_on_interrupt();
+        if interrupt_cycles > 0 {
+            interrupt_cycles;
+        }
+
+        if self.halt {
+            1; // noop
+        } else {
+            self.step();
+        }
+    }*/
 
 
     pub fn step(&mut self) {
@@ -1515,15 +1527,14 @@ impl CPU {
         if prefixed {
             instruction_byte = self.bus.read_byte(self.pc + 1);
         }
-        print!("0x{:0X} ", self.pc);
         let next_pc = if let Some(instruction) = Instruction::from_byte(instruction_byte, prefixed) {
             self.execute(instruction)
         } else {
             let description = format!("0x{}{:x}", if prefixed { "cb" } else { "" }, instruction_byte);
             panic!("Unkown instruction found for: {}", description)
         };
-        print!(" NEXT : 0x{:0X} | A : {} |", next_pc,self.registers.a);
         self.pc = next_pc;
+        
         
     }
 
@@ -1556,10 +1567,8 @@ impl CPU {
     }
 
     pub fn jump_relative(&mut self, condition: bool) {
-        println!("cond : {}",condition);
         if condition {
             let r8=self.read_next_byte() as i8;
-            println!("{}",r8);
             let new_pc = ((self.pc as i32) + 2 + r8 as i32) as u16;
             self.pc = new_pc;
         } else {
@@ -1579,5 +1588,54 @@ impl CPU {
             self.pc.wrapping_add(1)
         }
     }
+
+    /*fn update_interrupt_counters(&mut self) {
+        if self.di > 0 {
+            self.di -= 1;
+            if self.di == 0 {
+                self.interrupt_master_enable = false;
+            }
+        }
+
+        if self.ei > 0 {
+            self.ei -= 1;
+            if self.ei == 0 {
+                self.interrupt_master_enable = true;
+            }
+        }
+    }*/
+
+    fn jump_on_interrupt(&mut self) -> u8 {
+        if !self.interrupt_master_enable && !self.halt {
+            return 0;
+        }
+
+        let interrupt_flags = self.bus.get_triggered_interrupts();
+        if interrupt_flags == 0 {
+            return 0;
+        }
+
+        self.halt = false;
+        if !self.interrupt_master_enable {
+            return 0;
+        }
+        self.interrupt_master_enable = false;
+
+        let interrupt_jump_addresses: [u16; 5] = [0x40, 0x48, 0x50, 0x58, 0x60];
+
+        for (flag_number, interrupt_jump_address) in interrupt_jump_addresses.iter().enumerate() {
+            let flag = 1 << (flag_number as u8);
+            if interrupt_flags & flag > 0 {
+                self.bus.reset_interrupt(flag);
+                let old_pc = self.pc;
+                self.push(old_pc);
+                self.pc = *interrupt_jump_address;
+                return 4;
+            }
+        }
+
+        panic!("Unknown interrupt was not handled! 0b{:08b}", interrupt_flags);
+    }
+
 }
 

@@ -448,8 +448,7 @@ impl CPU {
                     JumpTest::Carry => self.registers.f.carry,
                     JumpTest::Always => true,
                 };
-                self.return_(jump_condition);
-                self.pc+1
+                self.return_(jump_condition)
             }
 
             Instruction::DAA => {self.daa();self.pc+1}

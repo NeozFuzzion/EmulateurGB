@@ -98,7 +98,7 @@ impl Instruction {
     pub fn from_byte(byte: u8, prefixed: bool) -> Option<Instruction> {
         
         if prefixed {
-            Self::print_debug_prefixed(byte.clone());
+            //Self::print_debug_prefixed(byte.clone());
             
             Instruction::from_byte_prefixed(byte)
         } else {

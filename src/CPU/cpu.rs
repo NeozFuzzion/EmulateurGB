@@ -1,3 +1,5 @@
+use std::thread::sleep;
+use std::time::Duration;
 use crate::{CPU::registres::Registers, Memory::memory::MemoryBus};
 
 use super::instructions::{ArithmeticTarget, RstTarget, Instruction, JumpTest, StackTarget, LoadByteSource, LoadType, LoadByteTarget, LoadWordSource, LoadWordTarget, JumpCondition};
@@ -8,7 +10,9 @@ pub struct CPU {
     pub(crate) bus: MemoryBus,
     pub(crate) sp: u16,
     pub(crate) interrupt_master_enable: bool,
-    pub(crate) halt: bool
+    pub(crate) halt: bool,
+    pub(crate) ei: u8,
+    pub(crate) di: u8
 }
 
 impl CPU {
@@ -312,9 +316,7 @@ impl CPU {
                             _ => { panic!("TODO: implement other targets") }
                         };
                         match (source, target) {
-                            (LoadByteSource::D8, _)
-                            | (LoadByteSource::A, LoadByteTarget::AddressC)
-                            | (LoadByteSource::AddressC, LoadByteTarget::A) => {
+                            (LoadByteSource::D8, _)=> {
                                 self.pc+2
                             }
                             (LoadByteSource::Address16, LoadByteTarget::A)
@@ -376,6 +378,7 @@ impl CPU {
             }
 
             Instruction::LDH(load_type) => {
+
                 match load_type {
                     LoadType::Byte(target, source) => {
 
@@ -412,7 +415,7 @@ impl CPU {
                     _ => { panic!("TODO: support more targets") }
                 };
                 self.push(value);
-                1
+                self.pc+1
             }
 
             Instruction::POP(target) => {
@@ -483,8 +486,8 @@ impl CPU {
 
             Instruction::RETI => {
                 self.pc = self.pop();
-                self.interrupt_master_enable = true;
-                self.pc + 1
+                self.ei = 1;
+                self.pc
             },
 
             Instruction::STOP => self.pc + 2,
@@ -493,12 +496,14 @@ impl CPU {
                 self.pc + 1},
 
             Instruction::EI => {
-                self.interrupt_master_enable=true;
+                //Like DI enabling take 1 more instructions to update IME flag
+                self.ei=2;
                 self.pc + 1
             },
 
             Instruction::DI => {
-                self.interrupt_master_enable=false;
+                //Like EI disabling take 1 more instructions to update IME flag
+                self.di=2;
                 self.pc + 1
             },
 
@@ -1505,22 +1510,24 @@ impl CPU {
         (msb << 8) | lsb
     }
 
-    /*pub fn prested(&mut self){
-        self.update_interrupt_counters();
-        let interrupt_cycles = self.jump_on_interrupt();
-        if interrupt_cycles > 0 {
-            interrupt_cycles;
-        }
-
-        if self.halt {
-            1; // noop
+    pub fn run(&mut self){
+        self.update_ime();
+        let interrupt = self.stat_interruption();
+        if interrupt > 0 {
+            self.pc=interrupt;
         } else {
-            self.step();
+
+            if self.halt {
+                1; // noop
+            } else {
+                self.step();
+            }
         }
-    }*/
+    }
 
 
     pub fn step(&mut self) {
+        print!("adresse : {:x} ",self.pc);
         let mut instruction_byte = self.bus.read_byte(self.pc);
         let prefixed = instruction_byte == 0xCB;
         if prefixed {
@@ -1534,6 +1541,7 @@ impl CPU {
         };
         self.pc = next_pc;
 
+
     }
 
     pub fn jump(&self, should_jump: bool, ju : JumpCondition) -> u16 {
@@ -1542,7 +1550,7 @@ impl CPU {
                 if should_jump {
                     let least_significant_byte = self.bus.read_byte(self.pc + 1) as u16;
                     let most_significant_byte = self.bus.read_byte(self.pc + 2) as u16;
-                    print!("0x{:0X} ",(most_significant_byte << 8) | least_significant_byte);
+                    //print!("0x{:0X} ",(most_significant_byte << 8) | least_significant_byte);
                     (most_significant_byte << 8) | least_significant_byte
                 } else {
                     self.pc.wrapping_add(3)
@@ -1587,7 +1595,7 @@ impl CPU {
         }
     }
 
-    /*fn update_interrupt_counters(&mut self) {
+    fn update_ime(&mut self) {
         if self.di > 0 {
             self.di -= 1;
             if self.di == 0 {
@@ -1601,38 +1609,42 @@ impl CPU {
                 self.interrupt_master_enable = true;
             }
         }
-    }*/
+    }
 
-    fn jump_on_interrupt(&mut self) -> u8 {
+    fn stat_interruption(&mut self) -> u16 {
+
+        //No interruption enable
         if !self.interrupt_master_enable && !self.halt {
             return 0;
         }
 
-        let interrupt_flags = self.bus.get_triggered_interrupts();
-        if interrupt_flags == 0 {
+        //Flag on bus which is called https://gbdev.io/pandocs/Interrupts.html#ffff--ie-interrupt-enable
+        let interruption = 1;//self.bus.interrupt_flags & self.bus.interrupt_enabled; //Operation on binary to get the right flag
+
+        if interruption == 0 {
             return 0;
         }
 
+        //Halt case return
         self.halt = false;
         if !self.interrupt_master_enable {
             return 0;
         }
+        //Set to false cause will take one now
         self.interrupt_master_enable = false;
-
-        let interrupt_jump_addresses: [u16; 5] = [0x40, 0x48, 0x50, 0x58, 0x60];
-
-        for (flag_number, interrupt_jump_address) in interrupt_jump_addresses.iter().enumerate() {
-            let flag = 1 << (flag_number as u8);
-            if interrupt_flags & flag > 0 {
-                self.bus.reset_interrupt(flag);
-                let old_pc = self.pc;
-                self.push(old_pc);
-                self.pc = *interrupt_jump_address;
-                return 4;
-            }
-        }
-
-        panic!("Unknown interrupt was not handled! 0b{:08b}", interrupt_flags);
+        //Push because it will jump or crash
+        self.push(self.pc);
+        let new_pc:u16 = match interruption{
+            1=>0x40,
+            2=>0x48,
+            4=>0x50,
+            8=>0x58,
+            16=>0x60,
+            _=> panic!("Interruption unknown")
+        };
+        //reset flag used
+        self.bus.interrupt_flags &= !interruption;
+        new_pc
     }
 
 }

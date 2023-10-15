@@ -35,6 +35,8 @@ fn main() {
         sp: 0xFFFE,
         halt: false,
         interrupt_master_enable: false,
+        ei:0,
+        di:0,
     };
     // Créez ou ouvrez le fichier de sortie pour écriture
     let mut output_file = OpenOptions::new()
@@ -54,7 +56,7 @@ fn main() {
 
     let cpu_thread = thread::spawn(move || {
         loop {
-            cpu.step();
+            cpu.run();
             x+=1
         }
     });

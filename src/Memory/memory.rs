@@ -37,17 +37,17 @@ impl MemoryBus {
     pub fn write_byte(&mut self, address: u16, byte: u8) {
         println!("{:x}",address);
         match address {
-            0x0000..=0x7FFF | 0xA000..=0xBFFF => self.memory[address as usize]=byte, // ROM and cart RAM
-            0x8000..=0x9FFF => panic!("WGPU"),              // Write to GPU
-            0xC000..=0xFDFF => self.wram[(address & 0x1FFF) as usize] = byte,        // Working RAM
-            0xFE00..=0xFE9F => panic!("WGPU"),                    // Graphics - sprite information
-            0xFF00 => panic!("WInput"),                                     // Input write
-            0xFF01..=0xFF02 => panic!("WSerial"),                     // Serial write
-            0xFF04..=0xFF07 => panic!("WClock"),                 // write Clock values
-            0xFF0F => self.interrupt_flags = byte,                                // Interrupt flags
-            //0xFF10..=0xFF26 => panic!("WSound"),                 // Sound control
-            //0xFF30..=0xFF3F => panic!("WSound"),                 // Sound wave pattern RAM
-            0xFF46 => panic!("Rsprite"),
+            0x0000..=0x7FFF | 0xA000..=0xBFFF => self.memory[address as usize]=byte,    // ROM and cart RAM
+            0x8000..=0x9FFF => self.gpu.write_vram(address,byte),                                   // Write to GPU
+            0xC000..=0xFDFF => self.wram[(address & 0x1FFF) as usize] = byte,           // Working RAM
+            0xFE00..=0xFE9F => self.gpu.write_oam(address,byte),                                          // Graphics - sprite information
+            0xFF00 => panic!("WInput"),                                                 // Input write
+            //0xFF01..=0xFF02 => panic!("WSerial"),                                     // Serial write
+            0xFF04..=0xFF07 => panic!("WClock"),                                        // write Clock values
+            0xFF0F => self.interrupt_flags = byte,                                      // Interrupt flags
+            //0xFF10..=0xFF26 => panic!("WSound"),                                      // Sound control
+            //0xFF30..=0xFF3F => panic!("WSound"),                                      // Sound wave pattern RAM
+            0xFF46 => panic!("Wsprite"),
             0xFF40..=0xFF45 | 0xFF47..=0xFF4B => self.gpu.write_lcd_reg(address,byte),
             /*0xFF4C..=0xFF7F => panic!(
                 "MMU ERROR: Memory mapped I/O (write) (CGB only) not implemented. Addr: 0x{:X}",

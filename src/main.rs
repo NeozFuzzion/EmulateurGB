@@ -31,7 +31,7 @@ fn main() {
     let mut cpu = CPU::cpu::CPU{
         registers: reg,
         pc: 0x0100,
-        bus: Memory::memory::MemoryBus{ memory: bytes, interrupt_flags: 0, interrupt_enabled: 0, wram: [0_u8; 0x2000],  hram: [0_u8; 0x80], gpu: Default::default() },
+        bus: Memory::memory::MemoryBus{ memory: bytes, interrupt_flags: 0, interrupt_enabled: 0, wram: [0_u8; 0x2000],  hram: [0_u8; 0x80], gpu: GPU::gpu::GPU::new() },
         sp: 0xFFFE,
         halt: false,
         interrupt_master_enable: false,

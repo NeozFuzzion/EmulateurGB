@@ -48,7 +48,7 @@ impl MemoryBus {
             0xFF0F => self.interrupt_flags = byte,                                                              // Interrupt flags
             //0xFF10..=0xFF26 => panic!("WSound"),                                                              // Sound control
             //0xFF30..=0xFF3F => panic!("WSound"),                                                              // Sound wave pattern RAM
-            //0xFF46 => panic!("Wsprite"),
+            0xFF46 => panic!("Wsprite {:?}", self.gpu.vram.iter().filter(|&&x| x == 47).count()),
             0xFF40..=0xFF45 | 0xFF47..=0xFF4B => self.gpu.write_lcd_reg(address,byte),
             /*0xFF4C..=0xFF7F => panic!(
                 "MMU ERROR: Memory mapped I/O (write) (CGB only) not implemented. Addr: 0x{:X}",

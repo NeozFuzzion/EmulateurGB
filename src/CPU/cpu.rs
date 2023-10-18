@@ -510,7 +510,7 @@ impl CPU {
             Instruction::NOP => self.pc + 1,
 
             Instruction::RST(npc) => {
-                let old_pc = self.pc;
+                let old_pc = self.pc+1;
                 self.push(old_pc);
                 match npc {
                     RstTarget::Rst00H => self.pc = 0x00,

@@ -414,6 +414,7 @@ impl CPU {
 
                     _ => { panic!("TODO: support more targets") }
                 };
+
                 self.push(value);
                 self.pc+1
             }
@@ -522,7 +523,7 @@ impl CPU {
                     RstTarget::Rst30H => self.pc = 0x30,
                     RstTarget::Rst38H => self.pc = 0x38,
                 };
-                self.pc + 1
+                self.pc
             },
 
             Instruction::ADDSP(targetd8) => self.execute_addsp(),
@@ -1498,6 +1499,9 @@ impl CPU {
 
         self.sp = self.sp.wrapping_sub(1);
         self.bus.write_byte(self.sp, (value & 0xFF) as u8);
+        if value==5673{
+            panic!("pushed : {:x}",self.pc);
+        }
     }
 
     pub fn pop(&mut self) -> u16 {
@@ -1506,17 +1510,17 @@ impl CPU {
 
         let msb = self.bus.read_byte(self.sp) as u16;
         self.sp = self.sp.wrapping_add(1);
-
+        println!("Poped : {}",(msb << 8) | lsb);
         (msb << 8) | lsb
     }
 
     pub fn run(&mut self){
         self.update_ime();
+        self.bus.run();
         let interrupt = self.stat_interruption();
         if interrupt > 0 {
             self.pc=interrupt;
         } else {
-
             if self.halt {
                 1; // noop
             } else {
@@ -1527,7 +1531,7 @@ impl CPU {
 
 
     pub fn step(&mut self) {
-        print!("adresse : {:x} ",self.pc);
+        println!("adresse : {:x} ",self.pc);
         let mut instruction_byte = self.bus.read_byte(self.pc);
         let prefixed = instruction_byte == 0xCB;
         if prefixed {
@@ -1619,7 +1623,7 @@ impl CPU {
         }
 
         //Flag on bus which is called https://gbdev.io/pandocs/Interrupts.html#ffff--ie-interrupt-enable
-        let interruption = 1;//self.bus.interrupt_flags & self.bus.interrupt_enabled; //Operation on binary to get the right flag
+        let interruption = self.bus.interrupt_flags & self.bus.interrupt_enabled; //Operation on binary to get the right flag
 
         if interruption == 0 {
             return 0;
@@ -1644,6 +1648,8 @@ impl CPU {
         };
         //reset flag used
         self.bus.interrupt_flags &= !interruption;
+
+        println!("interrutpion : {:b}",new_pc);
         new_pc
     }
 

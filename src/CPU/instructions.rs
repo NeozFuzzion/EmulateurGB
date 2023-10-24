@@ -102,7 +102,7 @@ impl Instruction {
             
             Instruction::from_byte_prefixed(byte)
         } else {
-            Self::print_debug(byte.clone());
+            //Self::print_debug(byte.clone());
             Instruction::from_byte_not_prefixed(byte)
         }
     }

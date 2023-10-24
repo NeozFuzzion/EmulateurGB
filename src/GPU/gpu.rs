@@ -1,4 +1,4 @@
-
+use std::sync::mpsc::Sender;
 
 pub struct GPU {
     pub(crate) vram: [u8; 0x2000],
@@ -18,6 +18,8 @@ pub struct GPU {
     obp0: [u32; 4],
     pub(crate) obp1_value: u8,                        //FF49
     obp1: [u32; 4],
+    pub(crate) screen_buffer: [u32; 160*144],
+    pub(crate) interrupt: u8,
 }
 
 
@@ -41,6 +43,8 @@ impl GPU {
             obp0: [0;4],
             obp1_value: 0,
             obp1: [0;4],
+            screen_buffer: [0_u32; 160*144],
+            interrupt: 0,
         }
     }
     pub fn read_lcd_reg(&self, address:u16) -> u8{
@@ -87,9 +91,18 @@ impl GPU {
             _ => panic!("Unknown GPU control read operation: 0x{:X}", address),
         }
     }
+
+    pub fn read_vram(&self, addr: u16) -> u8 {
+        self.vram[(addr & 0x1FFF) as usize]
+    }
     pub fn write_vram(&mut self, address: u16, value: u8) {
         self.vram[(address & 0x1FFF) as usize] = value;
     }
+
+    pub fn read_oam(&self, addr: u16) -> u8 {
+        self.oam[(addr & 0xFF) as usize]
+    }
+
     pub fn write_oam(&mut self, address: u16, value: u8) {
         self.oam[(address & & 0xFF) as usize] = value;
     }
@@ -105,10 +118,89 @@ impl GPU {
 
 
     fn addresses_tile_map(&self, is_bg:bool) -> u16 {
+        //the 2 different possibilities from the man
         if is_bg && self.lcdc & 0b00001000 > 0 || !is_bg && self.lcdc & 0b01000000 > 0 {
             return 0x9C00;
         }
         0x9800
+    }
+
+    pub fn run(&mut self, x: Sender<[u32;23040]>){
+        self.ly = (self.ly + 1) % 154;
+        if self.stat & 0x40 > 0 && self.ly == self.lyc {
+            self.interrupt |= 0x02;
+        }
+        //println!("{}",self.interrupt);
+        if self.ly == 144 {
+            // V-Blank
+            self.interrupt |= 0x01; // Mark V-Blank interrupt
+            x.send((self.screen_buffer)).unwrap();
+        }
+        self.step_bgwin();
+        //self.step_sprites();
+    }
+
+
+    pub fn step_bgwin(&mut self){
+        //bg on ? or Vblank
+        if !(self.lcdc & 0x01 > 0) || self.ly >= 144 {
+            return;
+        }
+
+        //Add scrolling y (place of the bg in the tile map) and current line(ly)
+        let bgy = self.scy.wrapping_add(self.ly);
+        //Keep all bit above the 3rd move by 3 to get a value 0-31
+        let bgy_tile_num = (u16::from(bgy) & 0xFF) >> 3;
+        let bgy_pixel_in_tile = u16::from(bgy) & 0x07;
+
+        for x in 0..160 {
+            let (tile_number, x_pixel_in_tile, y_pixel_in_tile): (u8, u8, u16) =  {
+                //As previously take same type as value because of 8*8 tile on a 256*256 map
+                let bgx = u32::from(self.scx) + x;
+                let bgx_tile_num  = ((bgx & 0xFF) >> 3) as u16;
+                //Stock in reverse
+                let bgx_pixel_in_tile = 7 - (bgx & 0x07) as u8;
+
+                //Vram like a line so y*32 + x to get the right number
+                let tile_number: u8 = self.read_vram(self.addresses_tile_map(true) + bgy_tile_num * 32 + bgx_tile_num);
+
+                (tile_number, bgx_pixel_in_tile, bgy_pixel_in_tile)
+            };
+
+            let tile_addr = if self.lcdc & 0b00010000 > 0 {
+                u16::from(tile_number) * 16 + 0x8000
+            } else {
+                // offset
+                let adjusted_tile_number = (i16::from(tile_number as i8) + 128) as u16;
+                adjusted_tile_number * 16 + 0x8800
+            };
+
+            let tile_line_addr = tile_addr + y_pixel_in_tile * 2;
+
+            //Retrieve the 2 line to merge to get the pixel id color
+            let (tile_line_data_1, tile_line_data_2) = (
+                self.read_vram(tile_line_addr),
+                self.read_vram(tile_line_addr + 1),
+            );
+
+            let pixel_in_line_mask = 1 << x_pixel_in_tile;
+            let pixel_data_1: u8 = if tile_line_data_1 & pixel_in_line_mask > 0 {
+                0b01
+            } else {
+                0b00
+            };
+            let pixel_data_2: u8 = if tile_line_data_2 & pixel_in_line_mask > 0 {
+                0b10
+            } else {
+                0b00
+            };
+            //merge value of both line to get id color
+            let palette_color_id = pixel_data_1 | pixel_data_2;
+
+            let pixel_addr = (u32::from(self.ly) * 160 + x) as usize;
+            self.screen_buffer[pixel_addr] = self.bgp[palette_color_id as usize];
+
+        }
     }
 
 
@@ -118,7 +210,7 @@ impl GPU {
 
 fn value_to_palette(value: u8) -> [u32; 4] {
     // Define the color values as hexadecimal 0=>White 1=>lightGray 2=>DarkGray 3=>Black
-    let colors = [0x000000, 0x555555, 0xaaaaaa, 0xffffff];
+    let colors = [0xffffff, 0xaaaaaa, 0x555555 ,0x000000];
     let mut result = [0; 4];
 
     for i in 0..4 {

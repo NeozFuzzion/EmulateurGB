@@ -12,7 +12,8 @@ pub struct CPU {
     pub(crate) interrupt_master_enable: bool,
     pub(crate) halt: bool,
     pub(crate) ei: u8,
-    pub(crate) di: u8
+    pub(crate) di: u8,
+    pub(crate) cycle:u8,
 }
 
 impl CPU {
@@ -480,10 +481,6 @@ impl CPU {
                 self.pc
             }
 
-            Instruction::JPI => {
-                self.jump_indirect();
-                self.pc
-            },
 
             Instruction::RETI => {
                 self.pc = self.pop();
@@ -1515,18 +1512,20 @@ impl CPU {
     }
 
     pub fn run(&mut self){
+        self.cycle=0;
         self.update_ime();
-        self.bus.run();
+
         let interrupt = self.stat_interruption();
         if interrupt > 0 {
             self.pc=interrupt;
         } else {
             if self.halt {
-                1; // noop
+                self.cycle=1; // noop
             } else {
                 self.step();
             }
         }
+        self.bus.run();
     }
 
 
@@ -1537,7 +1536,9 @@ impl CPU {
         if prefixed {
             instruction_byte = self.bus.read_byte(self.pc + 1);
         }
-        let next_pc = if let Some(instruction) = Instruction::from_byte(instruction_byte, prefixed) {
+        let (instruction,cycle) = Instruction::from_byte(instruction_byte, prefixed);
+        self.cycle=cycle;
+        let next_pc = if let Some(instruction) = instruction {
             self.execute(instruction)
         } else {
             let description = format!("0x{}{:x}", if prefixed { "cb" } else { "" }, instruction_byte);
@@ -1548,13 +1549,13 @@ impl CPU {
 
     }
 
-    pub fn jump(&self, should_jump: bool, ju : JumpCondition) -> u16 {
+    pub fn jump(&mut self, should_jump: bool, ju : JumpCondition) -> u16 {
         match ju {
             JumpCondition::Address16 => {
                 if should_jump {
                     let least_significant_byte = self.bus.read_byte(self.pc + 1) as u16;
                     let most_significant_byte = self.bus.read_byte(self.pc + 2) as u16;
-                    //print!("0x{:0X} ",(most_significant_byte << 8) | least_significant_byte);
+                    self.cycle+=1;
                     (most_significant_byte << 8) | least_significant_byte
                 } else {
                     self.pc.wrapping_add(3)
@@ -1570,6 +1571,7 @@ impl CPU {
         let next_pc = self.pc.wrapping_add(3);
         if should_jump {
             self.push(next_pc);
+            self.cycle+=3;
             self.read_next_word()
         } else {
             next_pc
@@ -1578,6 +1580,7 @@ impl CPU {
 
     pub fn jump_relative(&mut self, condition: bool) {
         if condition {
+            self.cycle+=1;
             let r8=self.read_next_byte() as i8;
             let new_pc = ((self.pc as i32) + 2 + r8 as i32) as u16;
             self.pc = new_pc;
@@ -1593,6 +1596,7 @@ impl CPU {
 
     pub fn return_(&mut self, should_jump: bool) -> u16 {
         if should_jump {
+            self.cycle+=3;
             self.pop()
         } else {
             self.pc.wrapping_add(1)

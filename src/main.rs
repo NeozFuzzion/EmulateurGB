@@ -38,7 +38,7 @@ fn main() {
         interrupt_master_enable: false,
         ei:0,
         di:0,
-
+        cycle:0,
     };
     // Créez ou ouvrez le fichier de sortie pour écriture
     let mut output_file = OpenOptions::new()

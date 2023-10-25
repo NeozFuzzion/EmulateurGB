@@ -75,12 +75,12 @@ impl MemoryBus {
 
     pub fn run(&mut self){
         self.gpu.run(self.screen_sender.clone());
-        //self.interrupt_flags |= self.gpu.interrupt;
-       // self.gpu.interrupt = 0;
-
+        self.interrupt_flags |= self.gpu.interrupt;
+        self.gpu.interrupt = 0;
+/*
         self.input.run();
         self.interrupt_flags |= self.input.interrupt;
-        self.input.interrupt = 0;
+        self.input.interrupt = 0;*/
     }
 
     pub fn reset_interrupt(&mut self, flag: u8) {

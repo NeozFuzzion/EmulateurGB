@@ -127,6 +127,7 @@ impl GPU {
 
     pub fn run(&mut self, x: Sender<[u32;23040]>){
         self.ly = (self.ly + 1) % 154;
+        println!("ly {}",self.ly);
         if self.stat & 0x40 > 0 && self.ly == self.lyc {
             self.interrupt |= 0x02;
         }
@@ -135,9 +136,10 @@ impl GPU {
             // V-Blank
             self.interrupt |= 0x01; // Mark V-Blank interrupt
             x.send((self.screen_buffer)).unwrap();
+
         }
         self.step_bgwin();
-        //self.step_sprites();
+        self.step_sprite();
     }
 
 
@@ -146,12 +148,17 @@ impl GPU {
         if !(self.lcdc & 0x01 > 0) || self.ly >= 144 {
             return;
         }
-        //TODO window print
+
         //Add scrolling y (place of the bg in the tile map) and current line(ly)
         let bgy = self.scy.wrapping_add(self.ly);
+        //case window
+        let winy = self.ly.wrapping_sub(self.wy);
         //Keep all bit above the 3rd move by 3 to get a value 0-31
         let bgy_tile_num = (u16::from(bgy) & 0xFF) >> 3;
         let bgy_pixel_in_tile = u16::from(bgy) & 0x07;
+
+        let winy_tile = (u16::from(winy) & 0xFF) >> 3;
+        let winy_pixel_in_tile = u16::from(winy) & 0x07;
 
         for x in 0..160 {
             let (tile_number, x_pixel_in_tile, y_pixel_in_tile): (u8, u8, u16) =  {
@@ -170,9 +177,9 @@ impl GPU {
                 let bgx_pixel_in_tile = 7 - (bgx & 0x07) as u8;
 
                 //Vram like a line so y*32 + x to get the right number
-                let tile_number: u8 = self.read_vram(self.addresses_tile_map(is_bg) + bgy_tile_num * 32 + bgx_tile_num);
+                let tile_number: u8 = self.read_vram(self.addresses_tile_map(is_bg) + bgy_tile_num * 32 * (is_bg as u16) + winy_tile * 32 * (!is_bg as u16) + bgx_tile_num);
 
-                (tile_number, bgx_pixel_in_tile, bgy_pixel_in_tile)
+                (tile_number, bgx_pixel_in_tile, bgy_pixel_in_tile*(is_bg as u16) + winy_pixel_in_tile*(!is_bg as u16))
             };
 
             let tile_addr = if self.lcdc & 0b00010000 > 0 {

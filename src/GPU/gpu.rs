@@ -146,7 +146,7 @@ impl GPU {
         if !(self.lcdc & 0x01 > 0) || self.ly >= 144 {
             return;
         }
-
+        //TODO window print
         //Add scrolling y (place of the bg in the tile map) and current line(ly)
         let bgy = self.scy.wrapping_add(self.ly);
         //Keep all bit above the 3rd move by 3 to get a value 0-31
@@ -156,13 +156,21 @@ impl GPU {
         for x in 0..160 {
             let (tile_number, x_pixel_in_tile, y_pixel_in_tile): (u8, u8, u16) =  {
                 //As previously take same type as value because of 8*8 tile on a 256*256 map
-                let bgx = u32::from(self.scx) + x;
+                let (bgx,is_bg) =
+                    if self.lcdc & 0x20 > 0 //window on ?
+                    && self.wy <= self.ly  && u32::from(self.wx) <= x + 7 {
+                        //Window case
+                        (x + 7 - u32::from(self.wx),false)
+                    } else {
+                        //BG case
+                        (u32::from(self.scx) + x,true)
+                    };
                 let bgx_tile_num  = ((bgx & 0xFF) >> 3) as u16;
                 //Stock in reverse
                 let bgx_pixel_in_tile = 7 - (bgx & 0x07) as u8;
 
                 //Vram like a line so y*32 + x to get the right number
-                let tile_number: u8 = self.read_vram(self.addresses_tile_map(true) + bgy_tile_num * 32 + bgx_tile_num);
+                let tile_number: u8 = self.read_vram(self.addresses_tile_map(is_bg) + bgy_tile_num * 32 + bgx_tile_num);
 
                 (tile_number, bgx_pixel_in_tile, bgy_pixel_in_tile)
             };
@@ -202,9 +210,86 @@ impl GPU {
 
         }
     }
+    //SPRITE : https://gbdev.io/pandocs/OAM.html
+    //is sprite on - ok
+    //Game Boy PPU can display up to 40 movable objects (or sprites), each 8×8 or 8×16 pixels.
+    //40 entries code like Byte 0 — Y Position Byte 1 — X Position Byte 2 — Tile Index Byte 3 — Attributes/Flags
+    //In Non-CGB mode, the smaller the X coordinate, the higher the priority. When X coordinates are identical, the object located first in OAM has higher priority.
 
+    // type of sprite
+    //get on oam  with (x,y)
 
+    pub fn step_sprite(&mut self){
+        if self.lcdc & 0x02 > 0 || self.ly >= 144 {
+            return;
+        }
+        let sprite_size = if self.lcdc & 0x04 > 0 {
+            16
+        } else {
+            8
+        };
 
+        for sprite in 0..40{
+
+            let sprite_addr = sprite * 4;
+            //Position correspond to the last pixel in the case of a 16 sized sprite
+            let sprite_y = self.read_oam(sprite_addr).wrapping_sub(16);
+            let sprite_x = self.read_oam(sprite_addr + 1).wrapping_sub(0x08);
+
+            let sprite_on_map = self.read_oam(sprite_addr + 2);
+            let sprite_flags = self.read_oam(sprite_addr + 3);
+
+            if (self.ly >= sprite_y) && (self.ly < (sprite_y + sprite_size)) {
+                //flip on y
+                let y_pixel_in_tile = if sprite_flags & 0x40 > 0 {
+                    u16::from(sprite_y + sprite_size - self.ly)
+                } else {
+                    u16::from(self.ly - sprite_y)
+                };
+
+                let sprite_addr = 0x8000_u16 + (u16::from(sprite_on_map) * 16) + y_pixel_in_tile * 2;
+                let sprite_data_1 = self.read_vram(sprite_addr);
+                let sprite_data_2 = self.read_vram(sprite_addr + 1);
+
+                for x_pixel_in_tile in 0..8_u8 {
+                    //flip on x
+                    let pixel_in_line_mask = if sprite_flags & 0x20 > 0 {
+                        1 << x_pixel_in_tile
+                    } else {
+                        1 << (7 - x_pixel_in_tile)
+                    };
+
+                    let pixel_data_1: u8 = if sprite_data_1 & pixel_in_line_mask > 0 {
+                        0b01
+                    } else {
+                        0b00
+                    };
+                    let pixel_data_2: u8 = if sprite_data_2 & pixel_in_line_mask > 0 {
+                        0b10
+                    } else {
+                        0b00
+                    };
+
+                    let palette_color_id = pixel_data_1 | pixel_data_2;
+                    if palette_color_id != 0 {
+
+                        let palette_map = if sprite_flags & 0x10 == 0 {
+                            self.obp0
+                        } else {
+                            self.obp1
+                        };
+                        let x = u32::from(sprite_x.wrapping_add(x_pixel_in_tile));
+
+                        let pixel_addr = (u32::from(self.ly) * 160 + x) as usize;
+                        if sprite_flags & 0x80 == 0 {
+                            self.screen_buffer[pixel_addr] =  palette_map[palette_color_id as usize];
+                        }
+                    }
+                }
+            }
+
+        }
+    }
 
 }
 

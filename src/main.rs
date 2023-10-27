@@ -35,7 +35,7 @@ fn main() {
         bus: Memory::memory::MemoryBus{ memory: bytes, interrupt_flags: 0, interrupt_enabled: 0, wram: [0_u8; 0x2000],  hram: [0_u8; 0x80], gpu: GPU::gpu::GPU::new(),screen_sender: tx, input: input::Input::new(key_receiver) },
         sp: 0xFFFE,
         halt: false,
-        interrupt_master_enable: false,
+        interrupt_master_enable: true,
         ei:0,
         di:0,
         cycle:0,
@@ -54,10 +54,29 @@ fn main() {
         key_sender,
     );
 
+    let mut file = File::create("output2.txt").expect("Impossible d'ouvrir le fichier de sortie.");
+    let mut file1 = File::create("output1.txt").expect("Impossible d'ouvrir le fichier de sortie.");
+    let mut tot_cycle=0_u32;
     let cpu_thread = thread::spawn(move || {
         loop {
-            cpu.run();
-            x+=1
+            let cycle=cpu.run();
+            if (x>22000000){
+                let line1 = format!("Tour de boucle {} : {:x} op : {:x} a : {}  b : {}  c : {}  d : {}  e : {}  h : {} l : {}  flag : {:b}  lcdc : {:b}  cycle : {}\n", x,cpu.pc,cpu.bus.read_byte(cpu.pc),cpu.registers.a,cpu.registers.b,cpu.registers.c,cpu.registers.d,cpu.registers.e,cpu.registers.h,cpu.registers.l , (cpu.registers.f.zero as u8)<<7 | (cpu.registers.f.subtract as u8)<<6 | (cpu.registers.f.half_carry as u8)<<5 | (cpu.registers.f.carry as u8)<<4,cpu.bus.gpu.lcdc,cpu.cycle);
+                file.write_all(line1.as_bytes()).expect("Impossible d'écrire dans le fichier.");
+                let line2 = format!("Tour de boucle {} : {:x} lcdc : {:b}\n", x,cpu.pc,cpu.bus.gpu.lcdc);
+                file1.write_all(line2.as_bytes()).expect("Impossible d'écrire dans le fichier.");
+            }
+            tot_cycle+=cpu.cycle as u32;
+            /*if (x==22100000){
+                for x in 0x0000..0x8000{
+                    let line2 = format!("{:x} op : {:x}\n", x,cpu.bus.read_byte(x));
+                    file1.write_all(line2.as_bytes()).expect("Impossible d'écrire dans le fichier.");
+                }
+
+                panic!("tot_cycle : {}",tot_cycle)
+            };*/
+
+            x+=1;
         }
     });
 

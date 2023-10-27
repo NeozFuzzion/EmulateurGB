@@ -71,52 +71,40 @@ impl Registers {
 
     pub fn get_bc(&self) -> u16 {
 
-        println!("get : b : {} / c : {}",self.b,self.c);(self.b as u16) << 8 | self.c as u16
+        (self.b as u16) << 8 | self.c as u16
     }
 
     pub fn set_bc(&mut self, value: u16) {
         self.b = ((value & 0xFF00) >> 8) as u8;
         self.c = (value & 0xFF) as u8;
-        println!("set : b : {} / c : {}",self.b,self.c);
     }
 
     pub fn get_de(&self) -> u16 {
-
-        println!("get d : {} / e : {}",self.d,self.e);
         (self.d as u16) << 8 | self.e as u16
     }
 
     pub fn set_de(&mut self, value: u16) {
         self.d = ((value & 0xFF00) >> 8) as u8;
         self.e = (value & 0xFF) as u8;
-        println!("set d : {} / e : {}",self.d,self.e);
 
     }
 
     pub fn get_hl(&self) -> u16 {
-
-        println!("get h : {} /l  : {}",self.h,self.l);
         (self.h as u16) << 8 | self.l as u16
     }
 
     pub fn set_hl(&mut self, value: u16) {
         self.h = ((value & 0xFF00) >> 8) as u8;
         self.l = (value & 0xFF) as u8;
-        println!("set h : {} /l  : {}",self.h,self.l);
-
     }
 
     pub fn get_af(&self) -> u16 {
-        println!("get a : {} /f  : {}",self.a,u8::from(self.f.clone()));
-
         (self.a as u16) << 8 | u8::from(self.f.clone()) as u16
     }
 
     pub fn set_af(&mut self, value: u16) {
         self.a = ((value & 0xFF00) >> 8) as u8;
         self.f = FlagsRegister::from(value as u8).clone();
-        println!("set a : {} /f  : {}",self.a,u8::from(self.f.clone()));
-
     }
 
     pub fn get_hlm(&mut self) -> u16 {

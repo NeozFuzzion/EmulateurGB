@@ -39,9 +39,12 @@ impl MemoryBus {
     }
 
     pub fn write_byte(&mut self, address: u16, byte: u8) {
+        if address==0x2000{
+            println!("stop {}",byte);
+        }
         //println!("{:x}",address);
         match address {
-            0x0000..=0x7FFF | 0xA000..=0xBFFF => self.memory[address as usize]=byte,                            // ROM and cart RAM
+            //0x0000..=0x7FFF | 0xA000..=0xBFFF => self.memory[address as usize]=byte,                            // ROM and cart RAM
             0x8000..=0x9FFF => self.gpu.write_vram(address,byte),                                         // Write to GPU
             0xC000..=0xFDFF => self.wram[(address & 0x1FFF) as usize] = byte,                                   // Working RAM
             0xFE00..=0xFE9F => self.gpu.write_oam(address,byte),                                          // Graphics - sprite information
@@ -73,18 +76,18 @@ impl MemoryBus {
         self.memory[(addr + 1) as usize] = ((word >> 8) & 0xFF) as u8;
     }
 
-    pub fn run(&mut self){
-        self.gpu.run(self.screen_sender.clone());
+    pub fn run(&mut self,cycle:u8){
+        self.gpu.run(self.screen_sender.clone(),cycle);
         self.interrupt_flags |= self.gpu.interrupt;
         self.gpu.interrupt = 0;
-/*
+
         self.input.run();
         self.interrupt_flags |= self.input.interrupt;
-        self.input.interrupt = 0;*/
+        self.input.interrupt = 0;
     }
 
     pub fn reset_interrupt(&mut self, flag: u8) {
-        self.interrupt_flags &= !flag;
+        self.interrupt_flags &= 0;
     }
     fn dma_into_oam(&mut self, dma_start: u8) {
         // DMA start can be addressed as 0x0000, 0x0100, 0x0200, etc

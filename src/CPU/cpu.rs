@@ -1,3 +1,4 @@
+use std::arch::x86_64::_bittest;
 use std::thread::sleep;
 use std::time::Duration;
 use crate::{CPU::registres::Registers, Memory::memory::MemoryBus};
@@ -79,7 +80,7 @@ impl CPU {
                         let new_value = self.add(value);
                         self.registers.a = new_value;
                     },
-                    _=> todo!(),
+                    _=> panic!("value 3connu"),
                 };
 
                 match target {
@@ -144,7 +145,7 @@ impl CPU {
                         let new_value = value.wrapping_add(1);
                         self.sp = new_value;
                     }
-                    _ => todo!()
+                    _ => panic!("value 4connu")
                 };
                 self.pc+1
             },
@@ -176,7 +177,7 @@ impl CPU {
                         let new_value = value.wrapping_sub(1);
                         self.sp = new_value;
                     }
-                    _ => todo!()
+                    _ => panic!("value 5connu")
                 };
                 self.pc+1
             },
@@ -296,6 +297,7 @@ impl CPU {
                             }
                             _ => { panic!("TODO: implement other sources") }
                         };
+
                         match target {
                             LoadByteTarget::A => self.registers.a = source_value,
                             LoadByteTarget::B => self.registers.b = source_value,
@@ -350,7 +352,6 @@ impl CPU {
                                 self.registers.f.carry= (sp ^ r8 ^ res) & 0x100 != 0;
                                 res as u16
                             }
-                            _ => { panic!("TODO: implement other sources") }
                         };
                         match target {
                             LoadWordTarget::BC => self.registers.set_bc(source_value),
@@ -360,7 +361,6 @@ impl CPU {
                             LoadWordTarget::Address16 => {
                                 let address = self.read_next_word();
                                 self.bus.write_word(address, source_value) },
-                            _ => { panic!("TODO: implement other targets") }
                         };
                         match (source, target) {
                             (LoadWordSource::HL,LoadWordTarget::SP) => {
@@ -374,7 +374,6 @@ impl CPU {
                             }
                         }
                     }
-                    _ => { panic!("TODO: implement other load types") }
                 }
             }
 
@@ -392,6 +391,7 @@ impl CPU {
                             },
                             _ => { panic!("TODO: implement other sources") }
                         };
+                        //println!("{}",source_value);
                         match target {
                             LoadByteTarget::A => self.registers.a = source_value,
                             LoadByteTarget::Address8 => {
@@ -412,8 +412,6 @@ impl CPU {
                     StackTarget::DE => self.registers.get_de(),
                     StackTarget::HL => self.registers.get_hl(),
                     StackTarget::AF => self.registers.get_af(),
-
-                    _ => { panic!("TODO: support more targets") }
                 };
 
                 self.push(value);
@@ -429,7 +427,6 @@ impl CPU {
                     StackTarget::AF => {
                         self.registers.set_af(result);
                     },
-                    _ => { panic!("TODO: support more targets") }
                 };
                 self.pc+1
             }
@@ -524,7 +521,7 @@ impl CPU {
             },
 
             Instruction::ADDSP(targetd8) => self.execute_addsp(),
-            Instruction::PrefixCB => todo!(),
+            Instruction::PrefixCB => panic!("value 6connu"),
         }
     }
 
@@ -573,7 +570,7 @@ impl CPU {
             ArithmeticTarget::DE => self.registers.get_de(),
             ArithmeticTarget::HL => self.registers.get_hl(),
             ArithmeticTarget::SP => self.sp,
-            _ => todo!()
+            _ => panic!("value 7connu")
 
         };
         let (new_value, did_overflow) = self.registers.get_hl().overflowing_add(value);
@@ -598,7 +595,7 @@ impl CPU {
         // then the addition caused a carry from the lower 12 bits to the upper 4 bits.
         self.registers.f.half_carry = (self.registers.get_hl() & 0xFFF) + (value & 0xFFF) > 0xFFF;
         self.sp=new_value;
-        2
+        self.pc + 2
 
     }
 
@@ -613,7 +610,7 @@ impl CPU {
             ArithmeticTarget::L => self.registers.l,
             ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
-            _=> todo!(),
+            _=> panic!("value 8connu"),
         };
 
         let carry = if self.registers.f.carry { 1 } else { 0 };
@@ -631,8 +628,8 @@ impl CPU {
         self.registers.a = new_value_with_carry;
 
         match target{
-            ArithmeticTarget::D8 => 2,
-            _ => 1,
+            ArithmeticTarget::D8 => self.pc + 2,
+            _ => self.pc+1,
         }
     }
 
@@ -647,7 +644,7 @@ impl CPU {
             ArithmeticTarget::L => self.registers.l,
             ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
-            _ => todo!(),
+            _ => panic!("value 9connu"),
 
         };
         let (new_value, did_overflow) = self.registers.a.overflowing_sub(value);
@@ -676,7 +673,7 @@ impl CPU {
             ArithmeticTarget::L => self.registers.l,
             ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
-            _ => todo!(),
+            _ => panic!("value 10connu"),
 
         };
 
@@ -709,7 +706,7 @@ impl CPU {
             ArithmeticTarget::L => self.registers.l,
             ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
-            _ => todo!(),
+            _ => panic!("value 11connu"),
 
         };
         let result = self.registers.a & value;
@@ -738,7 +735,7 @@ impl CPU {
             ArithmeticTarget::L => self.registers.l,
             ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
-            _ => todo!(),
+            _ => panic!("value 12connu"),
 
         };
 
@@ -768,7 +765,7 @@ impl CPU {
             ArithmeticTarget::L => self.registers.l,
             ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
-            _ => todo!(),
+            _ => panic!("value 13connu"),
 
         };
 
@@ -797,7 +794,7 @@ impl CPU {
             ArithmeticTarget::L => self.registers.l,
             ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
-            _ => todo!(),
+            _ => panic!("value 14connu"),
             //AddressHL -> gethl read address dans memory
             //d8 readnextbyte
         };
@@ -808,10 +805,11 @@ impl CPU {
         self.registers.f.zero = res==0;
         self.registers.f.subtract = true;
         self.registers.f.half_carry = (self.registers.a & 0x0F) < (value & 0x0F);
+        //println!("a: {},value : {}",self.registers.a,value);
         self.registers.f.carry = did_underflow;
         match target {
             ArithmeticTarget::D8 => self.pc+2,
-            _ => self.pc,
+            _ => self.pc+1,
         }
     }
 
@@ -866,7 +864,7 @@ impl CPU {
                 self.bus.write_byte(address, new_value);
                 new_value
             }
-            _ => todo!()
+            _ => panic!("value 15connu")
         };
 
         // Mettez à jour les drapeaux appropriés.
@@ -926,7 +924,7 @@ impl CPU {
                 self.bus.write_byte(address, new_value);
                 new_value
             }
-            _ => todo!()
+            _ => panic!("value 16connu")
         };
 
         // Mettez à jour les drapeaux appropriés (Zéro, Soustraction, Demi-retenue).
@@ -1009,7 +1007,7 @@ impl CPU {
     }
 
     pub fn execute_rlca(&mut self) {
-        let bit7 = (self.registers.a & 0x80) != 0;
+        let bit7 = self.registers.a  & 0x80 > 0;
 
         self.registers.a <<= 1;
 
@@ -1030,11 +1028,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.read_byte(address) // You may need to implement memory read here.
             },
-            _ => todo!(),
+            _ => panic!("value 17connu"),
         };
 
         // Test the specified bit and set flags accordingly.
@@ -1054,11 +1052,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.read_byte(address) // Read the value from memory.
             },
-            _ => todo!(),
+            _ => panic!("value 18connu,{:?}",target),
         };
 
         // Reset the specified bit.
@@ -1074,11 +1072,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e = value,
             ArithmeticTarget::H => self.registers.h = value,
             ArithmeticTarget::L => self.registers.l = value,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
             },
-            _ => todo!(),
+            _ => panic!("value 19connu"),
         }
     }
 
@@ -1091,11 +1089,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.read_byte(address) // Read the value from memory.
             },
-            _ => todo!(),
+            _ => panic!("value 20connu"),
         };
 
         // Set the specified bit.
@@ -1111,11 +1109,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e = value,
             ArithmeticTarget::H => self.registers.h = value,
             ArithmeticTarget::L => self.registers.l = value,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
             },
-            _ => todo!(),
+            _ => panic!("value 21connu"),
         }
     }
 
@@ -1128,11 +1126,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.read_byte(address) // Read the value from memory
             },
-            _ => todo!(),
+            _ => panic!("value 22connu"),
         };
 
         // Perform the bitwise right shift.
@@ -1149,11 +1147,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e = value,
             ArithmeticTarget::H => self.registers.h = value,
             ArithmeticTarget::L => self.registers.l = value,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
             },
-            _ => todo!()
+            _ => panic!("value 23connu")
         }
 
         // Update the flags.
@@ -1172,11 +1170,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.read_byte(address) // Read the value from memory.
             },
-            _ => todo!(),
+            _ => panic!("value 24connu"),
         };
 
         // Extract the carry bit and store it.
@@ -1197,11 +1195,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e = value,
             ArithmeticTarget::H => self.registers.h = value,
             ArithmeticTarget::L => self.registers.l = value,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
             },
-            _ => todo!(),
+            _ => panic!("value 2connu"),
         }
 
         // Update the flags.
@@ -1220,11 +1218,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.read_byte(address) // Read the value from memory.
             },
-            _ => todo!(),
+            _ => panic!("value 27connu"),
         };
 
         // Extract the carry bit and store it.
@@ -1245,11 +1243,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e = value,
             ArithmeticTarget::H => self.registers.h = value,
             ArithmeticTarget::L => self.registers.l = value,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
             },
-            _ => todo!(),
+            _ => panic!("value 28connu"),
         }
 
         // Update the flags.
@@ -1268,11 +1266,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.read_byte(address) // Read the value from memory.
             },
-            _ => todo!(),
+            _ => panic!("value 29connu"),
         };
 
         // Extract the rightmost bit and store it as the new carry.
@@ -1293,11 +1291,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e = value,
             ArithmeticTarget::H => self.registers.h = value,
             ArithmeticTarget::L => self.registers.l = value,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
             },
-            _ => todo!(),
+            _ => panic!("value 30connu"),
         }
 
         // Update the flags.
@@ -1316,11 +1314,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.read_byte(address) // Read the value from memory.
             },
-            _ => todo!(),
+            _ => panic!("value 31connu"),
         };
 
         // Extract the leftmost bit and store it as the new carry.
@@ -1341,11 +1339,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e = value,
             ArithmeticTarget::H => self.registers.h = value,
             ArithmeticTarget::L => self.registers.l = value,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
             },
-            _ => todo!(),
+            _ => panic!("value 32connu"),
         }
 
         // Update the flags.
@@ -1364,11 +1362,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.read_byte(address) // Read the value from memory.
             },
-            _ => todo!(),
+            _ => panic!("value 33connu"),
         };
 
         // Extract the rightmost bit and store it as the new carry.
@@ -1387,11 +1385,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e = value,
             ArithmeticTarget::H => self.registers.h = value,
             ArithmeticTarget::L => self.registers.l = value,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
             },
-            _ => todo!(),
+            _ => panic!("value 3connu"),
         }
 
         // Update the flags.
@@ -1410,11 +1408,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.read_byte(address) // Read the value from memory.
             },
-            _ => todo!(),
+            _ => panic!("value 37connu"),
         };
 
         // Extract the leftmost bit and store it as the new carry.
@@ -1432,11 +1430,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e = value,
             ArithmeticTarget::H => self.registers.h = value,
             ArithmeticTarget::L => self.registers.l = value,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
             },
-            _ => todo!(),
+            _ => panic!("value 38connu"),
         }
 
         // Update the flags.
@@ -1455,11 +1453,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e,
             ArithmeticTarget::H => self.registers.h,
             ArithmeticTarget::L => self.registers.l,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.read_byte(address) // Read the value from memory.
             },
-            _ => todo!(),
+            _ => panic!("value 1connu"),
         };
 
         // Perform the swap of the upper and lower nibbles.
@@ -1476,11 +1474,11 @@ impl CPU {
             ArithmeticTarget::E => self.registers.e = value,
             ArithmeticTarget::H => self.registers.h = value,
             ArithmeticTarget::L => self.registers.l = value,
-            ArithmeticTarget::HL => {
+            ArithmeticTarget::AddressHL => {
                 let address = self.registers.get_hl();
                 self.bus.write_byte(address, value); // Write the new value back to memory.
             },
-            _ => todo!(),
+            _ => panic!("value 2connu"),
         }
 
         // Update the flags.
@@ -1496,9 +1494,7 @@ impl CPU {
 
         self.sp = self.sp.wrapping_sub(1);
         self.bus.write_byte(self.sp, (value & 0xFF) as u8);
-        if value==5673{
-            panic!("pushed : {:x}",self.pc);
-        }
+
     }
 
     pub fn pop(&mut self) -> u16 {
@@ -1507,17 +1503,16 @@ impl CPU {
 
         let msb = self.bus.read_byte(self.sp) as u16;
         self.sp = self.sp.wrapping_add(1);
-        println!("Poped : {}",(msb << 8) | lsb);
+        //println!("Poped : {}",(msb << 8) | lsb);
         (msb << 8) | lsb
     }
 
-    pub fn run(&mut self){
-        self.cycle=0;
+    pub fn run(&mut self) -> u8{
         self.update_ime();
 
         let interrupt = self.stat_interruption();
         if interrupt > 0 {
-            self.pc=interrupt;
+            self.cycle=4;
         } else {
             if self.halt {
                 self.cycle=1; // noop
@@ -1525,12 +1520,12 @@ impl CPU {
                 self.step();
             }
         }
-        self.bus.run();
+        self.bus.run(self.cycle);
+        self.cycle
     }
 
 
     pub fn step(&mut self) {
-        println!("adresse : {:x} ",self.pc);
         let mut instruction_byte = self.bus.read_byte(self.pc);
         let prefixed = instruction_byte == 0xCB;
         if prefixed {
@@ -1551,6 +1546,7 @@ impl CPU {
 
     pub fn jump(&mut self, should_jump: bool, ju : JumpCondition) -> u16 {
         match ju {
+
             JumpCondition::Address16 => {
                 if should_jump {
                     let least_significant_byte = self.bus.read_byte(self.pc + 1) as u16;
@@ -1640,21 +1636,19 @@ impl CPU {
         }
         //Set to false cause will take one now
         self.interrupt_master_enable = false;
-        //Push because it will jump or crash
-        self.push(self.pc);
-        let new_pc:u16 = match interruption{
-            1=>0x40,
-            2=>0x48,
-            4=>0x50,
-            8=>0x58,
-            16=>0x60,
-            _=> panic!("Interruption unknown")
-        };
-        //reset flag used
-        self.bus.interrupt_flags &= !interruption;
-
-        println!("interrutpion : {:b}",new_pc);
-        new_pc
+        let interrupt_jump_addresses: [u16; 5] = [0x40, 0x48, 0x50, 0x58, 0x60];
+        for (flag_number, interrupt_jump_address) in interrupt_jump_addresses.iter().enumerate() {
+            let flag = 1 << (flag_number as u8);
+            if interruption & flag > 0 {
+                //println!("interrutpion : {:b} interrutpion : {:b}",interruption,flag);
+                self.bus.reset_interrupt(flag);
+                let old_pc = self.pc;
+                self.push(old_pc);
+                self.pc = *interrupt_jump_address;
+                return 4;
+            }
+        }
+        panic!("Unknown interrupt was not handled! 0b{:08b}", interruption);
     }
 
 }

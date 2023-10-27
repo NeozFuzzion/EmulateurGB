@@ -20,6 +20,7 @@ pub struct GPU {
     obp1: [u32; 4],
     pub(crate) screen_buffer: [u32; 160*144],
     pub(crate) interrupt: u8,
+    render_clock: u32,
 }
 
 
@@ -29,7 +30,7 @@ impl GPU {
         Self {
             vram: [0_u8; 0x2000],
             oam: [0_u8; 0xA0],
-            lcdc: 0,
+            lcdc: 0x91,
             stat: 0,
             scy: 0,
             scx: 0,
@@ -45,6 +46,7 @@ impl GPU {
             obp1: [0;4],
             screen_buffer: [0_u32; 160*144],
             interrupt: 0,
+            render_clock: 0,
         }
     }
     pub fn read_lcd_reg(&self, address:u16) -> u8{
@@ -66,6 +68,7 @@ impl GPU {
     }
 
     pub fn write_lcd_reg(&mut self, address:u16, value: u8){
+        //println!("add : {:x}, val : {:b}",address,value);
         match address {
             0xFF40 => self.lcdc=value,
             0xFF41 => self.stat=value,
@@ -125,21 +128,30 @@ impl GPU {
         0x9800
     }
 
-    pub fn run(&mut self, x: Sender<[u32;23040]>){
-        self.ly = (self.ly + 1) % 154;
-        println!("ly {}",self.ly);
-        if self.stat & 0x40 > 0 && self.ly == self.lyc {
-            self.interrupt |= 0x02;
+    pub fn run(&mut self, x: Sender<[u32;23040]>,cycle: u8){
+        //ecran on ?
+        if self.lcdc & 0x80 == 0 {
+            return;
         }
-        //println!("{}",self.interrupt);
-        if self.ly == 144 {
-            // V-Blank
-            self.interrupt |= 0x01; // Mark V-Blank interrupt
-            x.send((self.screen_buffer)).unwrap();
+        let cycles_u32 = u32::from(cycle);
+        if self.render_clock + cycles_u32 >= 114 {
+            self.render_clock = (self.render_clock + cycles_u32) % 114;
+            self.ly = (self.ly + 1) % 154;
 
+            if self.stat & 0x40 > 0 && self.ly == self.lyc {
+                self.interrupt |= 0x02;
+            }
+
+            if self.ly == 144 {
+                self.interrupt |= 0x01;
+                x.send((self.screen_buffer)).unwrap();
+            }
+
+            self.step_bgwin();
+            self.step_sprite();
+        } else {
+            self.render_clock += cycles_u32;
         }
-        self.step_bgwin();
-        self.step_sprite();
     }
 
 
@@ -163,12 +175,7 @@ impl GPU {
         for x in 0..160 {
             let (tile_number, x_pixel_in_tile, y_pixel_in_tile): (u8, u8, u16) =  {
                 //As previously take same type as value because of 8*8 tile on a 256*256 map
-                let (bgx,is_bg) =
-                    if self.lcdc & 0x20 > 0 //window on ?
-                    && self.wy <= self.ly  && u32::from(self.wx) <= x + 7 {
-                        //Window case
-                        (x + 7 - u32::from(self.wx),false)
-                    } else {
+                let (bgx,is_bg) ={
                         //BG case
                         (u32::from(self.scx) + x,true)
                     };
@@ -258,12 +265,12 @@ impl GPU {
                 let sprite_data_1 = self.read_vram(sprite_addr);
                 let sprite_data_2 = self.read_vram(sprite_addr + 1);
 
-                for x_pixel_in_tile in 0..8_u8 {
+                for x_pixel_tile in 0..8_u8 {
                     //flip on x
                     let pixel_in_line_mask = if sprite_flags & 0x20 > 0 {
-                        1 << x_pixel_in_tile
+                        1 << x_pixel_tile
                     } else {
-                        1 << (7 - x_pixel_in_tile)
+                        1 << (7 - x_pixel_tile)
                     };
 
                     let pixel_data_1: u8 = if sprite_data_1 & pixel_in_line_mask > 0 {
@@ -285,10 +292,10 @@ impl GPU {
                         } else {
                             self.obp1
                         };
-                        let x = u32::from(sprite_x.wrapping_add(x_pixel_in_tile));
+                        let x = u32::from(sprite_x.wrapping_add(x_pixel_tile));
 
                         let pixel_addr = (u32::from(self.ly) * 160 + x) as usize;
-                        if sprite_flags & 0x80 == 0 {
+                        if sprite_flags & 0x80 == 0 || self.screen_buffer[pixel_addr] ==  0xffffff{
                             self.screen_buffer[pixel_addr] =  palette_map[palette_color_id as usize];
                         }
                     }

@@ -6,6 +6,7 @@ pub enum JumpTest {
     Always
 }
 
+#[derive(Debug)]
 pub enum JumpCondition{
     Address16, AddressHL
 }
@@ -88,6 +89,7 @@ pub enum Instruction {
     PrefixCB
 }
 
+#[derive(Debug)]
 pub enum ArithmeticTarget {
     A, B, C, D, E, H, L, HL, AF, BC, DE, SP, AddressHL, D8
 }
@@ -97,11 +99,11 @@ impl Instruction {
     pub fn from_byte(byte: u8, prefixed: bool) -> (Option<Instruction>,u8) {
         
         if prefixed {
-            //Self::print_debug_prefixed(byte.clone);
+            //Self::print_debug_prefixed(byte);
             
             Instruction::from_byte_prefixed(byte)
         } else {
-            //Self::print_debug(byte.clone);
+            //Self::print_debug(byte);
             Instruction::from_byte_not_prefixed(byte)
         }
     }
@@ -457,7 +459,7 @@ impl Instruction {
             0xFD => (Some(Instruction::SET(ArithmeticTarget::L, 7)),2),
             0xFE => (Some(Instruction::SET(ArithmeticTarget::AddressHL, 7)),4),
             0xFF => (Some(Instruction::SET(ArithmeticTarget::A, 7)),2),
-            _ =>  None
+            _ =>  (None,0)
         }
     }
 
@@ -537,7 +539,7 @@ impl Instruction {
             0x43 => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::E))),1),
             0x44 => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::H))),1),
             0x45 => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::L))),1),
-            0x46 => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::AddressHLM))),2),
+            0x46 => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::AddressHL))),2),
             0x47 => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::A))),1),
             0x48 => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::B))),1),
             0x49 => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::C))),1),
@@ -545,7 +547,7 @@ impl Instruction {
             0x4B => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::E))),1),
             0x4C => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::H))),1),
             0x4D => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::L))),1),
-            0x4E => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::AddressHLM))),2),
+            0x4E => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::AddressHL))),2),
             0x4F => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::A))),1),
                                                                                                                                                                                                                                                                                                                                         
             0x50 => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::D, LoadByteSource::B))),1),
@@ -723,7 +725,7 @@ impl Instruction {
             0xFB => (Some(Instruction::EI),1),
             0xFE => (Some(Instruction::CP(ArithmeticTarget::D8)),2),
             0xFF => (Some(Instruction::RST(RstTarget::Rst38H)),4),
-            _ => /* TODO: Add mapping for rest of instructions */ None
+            _ => (None,0)
         }
     }
 }

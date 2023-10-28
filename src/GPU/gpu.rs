@@ -107,7 +107,7 @@ impl GPU {
     }
 
     pub fn write_oam(&mut self, address: u16, value: u8) {
-        self.oam[(address & & 0xFF) as usize] = value;
+        self.oam[(address & 0xFF) as usize] = value;
     }
 
     fn addresses_data_tiles(&self) -> u16 {
@@ -234,7 +234,7 @@ impl GPU {
     //get on oam  with (x,y)
 
     pub fn step_sprite(&mut self){
-        if self.lcdc & 0x02 > 0 || self.ly >= 144 {
+        if self.lcdc & 0x02 == 0 || self.ly >= 144 {
             return;
         }
         let sprite_size = if self.lcdc & 0x04 > 0 {
@@ -252,9 +252,13 @@ impl GPU {
 
             let sprite_on_map = self.read_oam(sprite_addr + 2);
             let sprite_flags = self.read_oam(sprite_addr + 3);
-
+            if !(self.ly < sprite_y) || (self.ly >= (sprite_y + sprite_size)){
+                println!("{}/{}",sprite_x,sprite_y);
+            }
             if (self.ly >= sprite_y) && (self.ly < (sprite_y + sprite_size)) {
+
                 //flip on y
+
                 let y_pixel_in_tile = if sprite_flags & 0x40 > 0 {
                     u16::from(sprite_y + sprite_size - self.ly)
                 } else {

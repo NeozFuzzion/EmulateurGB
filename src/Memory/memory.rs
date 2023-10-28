@@ -26,7 +26,7 @@ impl MemoryBus {
             0xFE00..=0xFE9F =>  self.gpu.read_oam(address),                    // Graphics - sprite information
             0xFF00 => self.input.read(),                                   // Input read
             0xFF01..=0xFF02 => panic!("RSerial"),                     // Serial read
-            0xFF04..=0xFF07 => panic!("RClock"),                 // read Clock values
+            //0xFF04..=0xFF07 => panic!("RClock"),                 // read Clock values
             0xFF0F => self.interrupt_flags,                                // Interrupt flags
             //0xFF10..=0xFF26 => panic!("RSound"),                 // Sound control
             //0xFF30..=0xFF3F => panic!("RSound"),                 // Sound wave pattern RAM

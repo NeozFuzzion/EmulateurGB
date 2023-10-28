@@ -60,19 +60,14 @@ fn main() {
     let cpu_thread = thread::spawn(move || {
         loop {
             let cycle=cpu.run();
-            if (x>22000000){
-                let line1 = format!("Tour de boucle {} : {:x} op : {:x} a : {}  b : {}  c : {}  d : {}  e : {}  h : {} l : {}  flag : {:b}  lcdc : {:b}  cycle : {}\n", x,cpu.pc,cpu.bus.read_byte(cpu.pc),cpu.registers.a,cpu.registers.b,cpu.registers.c,cpu.registers.d,cpu.registers.e,cpu.registers.h,cpu.registers.l , (cpu.registers.f.zero as u8)<<7 | (cpu.registers.f.subtract as u8)<<6 | (cpu.registers.f.half_carry as u8)<<5 | (cpu.registers.f.carry as u8)<<4,cpu.bus.gpu.lcdc,cpu.cycle);
+            /*if x>=3800000{
+                let line1 = format!("Tour de boucle {} : {:x} vram : {:?} oam : {:?}\n", x,cpu.pc,cpu.bus.gpu.vram, cpu.bus.gpu.oam);
                 file.write_all(line1.as_bytes()).expect("Impossible d'écrire dans le fichier.");
                 let line2 = format!("Tour de boucle {} : {:x} lcdc : {:b}\n", x,cpu.pc,cpu.bus.gpu.lcdc);
                 file1.write_all(line2.as_bytes()).expect("Impossible d'écrire dans le fichier.");
-            }
+        }*/
             tot_cycle+=cpu.cycle as u32;
-            /*if (x==22100000){
-                for x in 0x0000..0x8000{
-                    let line2 = format!("{:x} op : {:x}\n", x,cpu.bus.read_byte(x));
-                    file1.write_all(line2.as_bytes()).expect("Impossible d'écrire dans le fichier.");
-                }
-
+           /* if (x==4000000){
                 panic!("tot_cycle : {}",tot_cycle)
             };*/
 

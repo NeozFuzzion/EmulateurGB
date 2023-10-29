@@ -252,9 +252,7 @@ impl GPU {
 
             let sprite_on_map = self.read_oam(sprite_addr + 2);
             let sprite_flags = self.read_oam(sprite_addr + 3);
-            if !(self.ly < sprite_y) || (self.ly >= (sprite_y + sprite_size)){
-                println!("{}/{}",sprite_x,sprite_y);
-            }
+
             if (self.ly >= sprite_y) && (self.ly < (sprite_y + sprite_size)) {
 
                 //flip on y

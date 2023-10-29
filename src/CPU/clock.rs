@@ -6,7 +6,6 @@ pub struct Clock {
     tma:u8,
     tac:u8,
     pub interrupt:u8,
-    timer:u8,
     counter:u32
 }
 
@@ -47,9 +46,9 @@ impl Clock {
                 _ => panic!("error of limit timer")
             };
             while self.counter >= limit {
-                self.timer = self.timer.wrapping_add(1);
-                if self.timer == 0 {
-                    self.timer = self.tma;
+                self.tima = self.tima.wrapping_add(1);
+                if self.tima == 0 {
+                    self.tima = self.tma;
                     self.interrupt |= 0x04;
                 }
                 self.counter -= limit;

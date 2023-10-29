@@ -17,7 +17,7 @@ extern crate glutin;
 use glium::{ Surface, Display, Frame, Program, VertexBuffer, implement_vertex, uniform};
 use glium::uniforms::{Uniforms, UniformValue, AsUniformValue};
 use std::io::prelude::*;
-use glutin::EventsLoop;
+use crate::CPU::clock::Clock;
 
 fn main() {
     let reg=Registers ::new();
@@ -32,7 +32,7 @@ fn main() {
     let mut cpu = CPU::cpu::CPU{
         registers: reg,
         pc: 0x0100,
-        bus: Memory::memory::MemoryBus{ memory: bytes, interrupt_flags: 0, interrupt_enabled: 0, wram: [0_u8; 0x2000],  hram: [0_u8; 0x80], gpu: GPU::gpu::GPU::new(),screen_sender: tx, input: input::Input::new(key_receiver) },
+        bus: Memory::memory::MemoryBus{ memory: bytes, interrupt_flags: 0, interrupt_enabled: 0, wram: [0_u8; 0x2000],  hram: [0_u8; 0x80], gpu: GPU::gpu::GPU::new(),screen_sender: tx, input: input::Input::new(key_receiver), clock: Clock::default() },
         sp: 0xFFFE,
         halt: false,
         interrupt_master_enable: true,

@@ -19,6 +19,8 @@ pub struct CPU {
 
 impl CPU {
 
+    const CPU_FREQ: u32 =4_194_304;
+
     pub fn read_next_byte(&mut self) -> u8 {
         //self.pc += 1;
         let byte = self.bus.read_byte(self.pc+1);

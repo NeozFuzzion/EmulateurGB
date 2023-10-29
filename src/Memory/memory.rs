@@ -1,5 +1,6 @@
 use core::panic;
 use std::sync::mpsc::Sender;
+use crate::CPU::clock::Clock;
 
 use crate::GPU::gpu::GPU;
 use crate::input::Input;
@@ -13,6 +14,7 @@ pub struct MemoryBus {
     pub(crate) interrupt_flags: u8,
     pub(crate) interrupt_enabled: u8,
     pub(crate) input: Input,
+    pub(crate) clock: Clock,
 }
 
 impl MemoryBus {
@@ -26,7 +28,7 @@ impl MemoryBus {
             0xFE00..=0xFE9F =>  self.gpu.read_oam(address),                    // Graphics - sprite information
             0xFF00 => self.input.read(),                                   // Input read
             0xFF01..=0xFF02 => panic!("RSerial"),                     // Serial read
-            //0xFF04..=0xFF07 => panic!("RClock"),                 // read Clock values
+            0xFF04..=0xFF07 => self.clock.read(address),                 // read Clock values
             0xFF0F => self.interrupt_flags,                                // Interrupt flags
             //0xFF10..=0xFF26 => panic!("RSound"),                 // Sound control
             //0xFF30..=0xFF3F => panic!("RSound"),                 // Sound wave pattern RAM
@@ -50,8 +52,7 @@ impl MemoryBus {
             0xFE00..=0xFE9F => self.gpu.write_oam(address,byte),                                          // Graphics - sprite information
             0xFF00 =>       self.input.write(byte),                                             // Input write
             //0xFF01..=0xFF02 => panic!("WSerial"),                                                             // Serial write
-            0xFF04..=0xFF07 => println!("_________________________________________________________________"),                 // write Clock values
-            // write Clock values
+            0xFF04..=0xFF07 => self.clock.write(address,byte),                 // write Clock values
             0xFF0F => self.interrupt_flags = byte,                                                              // Interrupt flags
             //0xFF10..=0xFF26 => panic!("WSound"),                                                              // Sound control
             //0xFF30..=0xFF3F => panic!("WSound"),                                                              // Sound wave pattern RAM
@@ -84,6 +85,10 @@ impl MemoryBus {
         self.input.run();
         self.interrupt_flags |= self.input.interrupt;
         self.input.interrupt = 0;
+
+        self.clock.run((cycle * 4) as u32);
+        self.interrupt_flags |= self.clock.interrupt;
+        self.clock.interrupt=0;
     }
 
     pub fn reset_interrupt(&mut self, flag: u8) {

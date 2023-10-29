@@ -1,4 +1,3 @@
-use std::fmt;
 use std::sync::mpsc;
 
 
@@ -136,21 +135,6 @@ impl Input {
         [&self.right, &self.left, &self.up, &self.down]
     }
 }
-/*
-impl fmt::Display for KeyType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            KeyType::Right => write!(f, "Right"),
-            KeyType::Left => write!(f, "Left"),
-            KeyType::Up => write!(f, "Up"),
-            KeyType::Down => write!(f, "Down"),
-            KeyType::A => write!(f, "A"),
-            KeyType::B => write!(f, "B"),
-            KeyType::Select => write!(f, "Select"),
-            KeyType::Start => write!(f, "Start"),
-        }
-    }
-}*/
 
 impl KeyType {
     pub fn value(&self) -> u8 {

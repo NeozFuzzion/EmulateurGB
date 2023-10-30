@@ -59,17 +59,13 @@ fn main() {
     let cpu_thread = thread::spawn(move || {
         let mut tot_cycle=0_u32;
         let mut now = SystemTime::now();
-        let one_second = Duration::from_secs(1);
         loop {
-            let one_second_later=now + one_second;
-            if tot_cycle>=cpu::CPU::CPU_FREQ && one_second_later>SystemTime::now() {
-                let difference = one_second_later.duration_since(SystemTime::now()).expect("Le temps actuel est antérieur à 'now'");
-                thread::sleep(difference);
-                tot_cycle=0;
+            if tot_cycle>=cpu::CPU::CPU_FREQ/100 {
+                thread::sleep(std::time::Duration::from_millis(10));
+                tot_cycle-=cpu::CPU::CPU_FREQ/100;
                 now=SystemTime::now();
             }
                 tot_cycle+=cpu.run()as u32*4 ;
-
         }
     });
 

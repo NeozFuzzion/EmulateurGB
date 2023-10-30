@@ -17,7 +17,9 @@ extern crate glutin;
 use glium::{ Surface, Display, Frame, Program, VertexBuffer, implement_vertex, uniform};
 use glium::uniforms::{Uniforms, UniformValue, AsUniformValue};
 use std::io::prelude::*;
+use std::time::{Duration, SystemTime};
 use crate::CPU::clock::Clock;
+use crate::CPU::cpu;
 
 fn main() {
     let reg=Registers ::new();
@@ -54,24 +56,20 @@ fn main() {
         key_sender,
     );
 
-    let mut file = File::create("output2.txt").expect("Impossible d'ouvrir le fichier de sortie.");
-    let mut file1 = File::create("output1.txt").expect("Impossible d'ouvrir le fichier de sortie.");
-    let mut tot_cycle=0_u32;
     let cpu_thread = thread::spawn(move || {
+        let mut tot_cycle=0_u32;
+        let mut now = SystemTime::now();
+        let one_second = Duration::from_secs(1);
         loop {
-            let cycle=cpu.run();
-            /*if x>=3800000{
-                let line1 = format!("Tour de boucle {} : {:x} vram : {:?} oam : {:?}\n", x,cpu.pc,cpu.bus.gpu.vram, cpu.bus.gpu.oam);
-                file.write_all(line1.as_bytes()).expect("Impossible d'écrire dans le fichier.");
-                let line2 = format!("Tour de boucle {} : {:x} lcdc : {:b}\n", x,cpu.pc,cpu.bus.gpu.lcdc);
-                file1.write_all(line2.as_bytes()).expect("Impossible d'écrire dans le fichier.");
-        }*/
-            tot_cycle+=cpu.cycle as u32;
-           /* if (x==4000000){
-                panic!("tot_cycle : {}",tot_cycle)
-            };*/
+            let one_second_later=now + one_second;
+            if tot_cycle>=cpu::CPU::CPU_FREQ && one_second_later>SystemTime::now() {
+                let difference = one_second_later.duration_since(SystemTime::now()).expect("Le temps actuel est antérieur à 'now'");
+                thread::sleep(difference);
+                tot_cycle=0;
+                now=SystemTime::now();
+            }
+                tot_cycle+=cpu.run()as u32*4 ;
 
-            x+=1;
         }
     });
 

@@ -1,7 +1,4 @@
-use std::arch::x86_64::_bittest;
-use std::thread::sleep;
-use std::time::Duration;
-use crate::{CPU::registres::Registers, Memory::memory::MemoryBus};
+use crate::{cpu::registres::Registers, memory::memory::MemoryBus};
 
 use super::instructions::{ArithmeticTarget, RstTarget, Instruction, JumpTest, StackTarget, LoadByteSource, LoadType, LoadByteTarget, LoadWordSource, LoadWordTarget, JumpCondition};
 
@@ -18,8 +15,7 @@ pub struct CPU {
 }
 
 impl CPU {
-
-    pub const CPU_FREQ: u32 =4_194_304;
+    // pub const CPU_FREQ: u32 =4_194_304;
 
     pub fn read_next_byte(&mut self) -> u8 {
         //self.pc += 1;
@@ -309,7 +305,6 @@ impl CPU {
                             LoadByteTarget::H => self.registers.h = source_value,
                             LoadByteTarget::L => self.registers.l = source_value,
                             LoadByteTarget::AddressHL => self.bus.write_byte(self.registers.get_hl(), source_value),
-                            LoadByteTarget::AddressBC => self.bus.write_byte(self.registers.get_bc(), source_value),
                             LoadByteTarget::AddressDE => self.bus.write_byte(self.registers.get_de(), source_value),
                             LoadByteTarget::AddressHLP =>self.bus.write_byte(self.registers.get_hlp(), source_value),
                             LoadByteTarget::AddressHLM => self.bus.write_byte(self.registers.get_hlm(), source_value),
@@ -344,7 +339,7 @@ impl CPU {
                             LoadWordSource::HL => self.registers.get_hl(),
                             LoadWordSource::SP => self.sp,
                             LoadWordSource::SPR8 => {
-                                let r8 = (self.read_next_byte() as i8 as i32);
+                                let r8 = self.read_next_byte() as i8 as i32;
                                 let sp = self.sp as i32;
                                 let res = sp.wrapping_add(r8);
 
@@ -433,49 +428,25 @@ impl CPU {
                 self.pc+1
             }
 
-            Instruction::CALL(test, target) => {
-                let jump_condition = match test {
-                    JumpTest::NotZero => !self.registers.f.zero,
-                    JumpTest::NotCarry => !self.registers.f.carry,
-                    JumpTest::Zero => self.registers.f.zero,
-                    JumpTest::Carry => self.registers.f.carry,
-                    JumpTest::Always => true,
-                };
+            Instruction::CALL(test) => {
+                let jump_condition = self.getjump_condition(test);
                 self.call(jump_condition)
             }
 
             Instruction::RET(test) => {
-                let jump_condition = match test {
-                    JumpTest::NotZero => !self.registers.f.zero,
-                    JumpTest::NotCarry => !self.registers.f.carry,
-                    JumpTest::Zero => self.registers.f.zero,
-                    JumpTest::Carry => self.registers.f.carry,
-                    JumpTest::Always => true,
-                };
+                let jump_condition = self.getjump_condition(test);
                 self.return_(jump_condition)
             }
 
             Instruction::DAA => {self.daa();self.pc+1}
 
             Instruction::JP(test, ju) => {
-                let jump_condition = match test {
-                    JumpTest::NotZero => !self.registers.f.zero,
-                    JumpTest::NotCarry => !self.registers.f.carry,
-                    JumpTest::Zero => self.registers.f.zero,
-                    JumpTest::Carry => self.registers.f.carry,
-                    JumpTest::Always => true,
-                };
+                let jump_condition = self.getjump_condition(test);
                 self.jump(jump_condition,ju)
             }
 
             Instruction::JR(test) => {
-                let jump_condition = match test {
-                    JumpTest::NotZero => !self.registers.f.zero,
-                    JumpTest::NotCarry => !self.registers.f.carry,
-                    JumpTest::Zero => self.registers.f.zero,
-                    JumpTest::Carry => self.registers.f.carry,
-                    JumpTest::Always => true,
-                };
+                let jump_condition = self.getjump_condition(test);
                 self.jump_relative(jump_condition);
                 self.pc
             }
@@ -522,7 +493,7 @@ impl CPU {
                 self.pc
             },
 
-            Instruction::ADDSP(targetd8) => self.execute_addsp(),
+            Instruction::ADDSP() => self.execute_addsp(),
             Instruction::PrefixCB => panic!("value 6connu"),
         }
     }
@@ -566,7 +537,6 @@ impl CPU {
     }
 
     pub fn execute_add_hl(&mut self, target: ArithmeticTarget) -> u16{
-        let hl_value = self.registers.get_hl();
         let value = match target {
             ArithmeticTarget::BC => self.registers.get_bc(),
             ArithmeticTarget::DE => self.registers.get_de(),
@@ -818,43 +788,36 @@ impl CPU {
     pub fn execute_inc(&mut self, target: ArithmeticTarget) {
         let new_value = match target {
             ArithmeticTarget::A => {
-                let value = self.registers.a;
                 let new_value = self.registers.a.wrapping_add(1);
                 self.registers.a = new_value;
                 new_value
             }
             ArithmeticTarget::B => {
-                let value = self.registers.b;
                 let new_value = self.registers.b.wrapping_add(1);
                 self.registers.b = new_value;
                 new_value
             }
             ArithmeticTarget::C => {
-                let value = self.registers.c;
                 let new_value = self.registers.c.wrapping_add(1);
                 self.registers.c = new_value;
                 new_value
             }
             ArithmeticTarget::D => {
-                let value = self.registers.d;
                 let new_value = self.registers.d.wrapping_add(1);
                 self.registers.d = new_value;
                 new_value
             }
             ArithmeticTarget::E => {
-                let value = self.registers.e;
                 let new_value = self.registers.e.wrapping_add(1);
                 self.registers.e = new_value;
                 new_value
             }
             ArithmeticTarget::H => {
-                let value = self.registers.h;
                 let new_value = self.registers.h.wrapping_add(1);
                 self.registers.h = new_value;
                 new_value
             }
             ArithmeticTarget::L => {
-                let value = self.registers.l;
                 let new_value = self.registers.l.wrapping_add(1);
                 self.registers.l = new_value;
                 new_value
@@ -878,43 +841,36 @@ impl CPU {
     pub fn execute_dec(&mut self, target: ArithmeticTarget) {
         let new_value = match target {
             ArithmeticTarget::A => {
-                let value = self.registers.a;
                 let new_value = self.registers.a.wrapping_sub(1);
                 self.registers.a = new_value;
                 new_value
             }
             ArithmeticTarget::B => {
-                let value = self.registers.b;
                 let new_value = self.registers.b.wrapping_sub(1);
                 self.registers.b = new_value;
                 new_value
             }
             ArithmeticTarget::C => {
-                let value = self.registers.c;
                 let new_value = self.registers.c.wrapping_sub(1);
                 self.registers.c = new_value;
                 new_value
             }
             ArithmeticTarget::D => {
-                let value = self.registers.d;
                 let new_value = self.registers.d.wrapping_sub(1);
                 self.registers.d = new_value;
                 new_value
             }
             ArithmeticTarget::E => {
-                let value = self.registers.e;
                 let new_value = self.registers.e.wrapping_sub(1);
                 self.registers.e = new_value;
                 new_value
             }
             ArithmeticTarget::H => {
-                let value = self.registers.h;
                 let new_value = self.registers.h.wrapping_sub(1);
                 self.registers.h = new_value;
                 new_value
             }
             ArithmeticTarget::L => {
-                let value = self.registers.l;
                 let new_value = self.registers.l.wrapping_sub(1);
                 self.registers.l = new_value;
                 new_value
@@ -1189,20 +1145,7 @@ impl CPU {
         }
 
         // Update the register or memory with the new value.
-        match target {
-            ArithmeticTarget::A => self.registers.a = value,
-            ArithmeticTarget::B => self.registers.b = value,
-            ArithmeticTarget::C => self.registers.c = value,
-            ArithmeticTarget::D => self.registers.d = value,
-            ArithmeticTarget::E => self.registers.e = value,
-            ArithmeticTarget::H => self.registers.h = value,
-            ArithmeticTarget::L => self.registers.l = value,
-            ArithmeticTarget::AddressHL => {
-                let address = self.registers.get_hl();
-                self.bus.write_byte(address, value); // Write the new value back to memory.
-            },
-            _ => panic!("value 2connu"),
-        }
+        self.put_on_target(target,value);
 
         // Update the flags.
         self.registers.f.zero = value == 0;
@@ -1468,20 +1411,7 @@ impl CPU {
         value = (lower_nibble << 4) | upper_nibble;
 
         // Update the register or memory with the new value.
-        match target {
-            ArithmeticTarget::A => self.registers.a = value,
-            ArithmeticTarget::B => self.registers.b = value,
-            ArithmeticTarget::C => self.registers.c = value,
-            ArithmeticTarget::D => self.registers.d = value,
-            ArithmeticTarget::E => self.registers.e = value,
-            ArithmeticTarget::H => self.registers.h = value,
-            ArithmeticTarget::L => self.registers.l = value,
-            ArithmeticTarget::AddressHL => {
-                let address = self.registers.get_hl();
-                self.bus.write_byte(address, value); // Write the new value back to memory.
-            },
-            _ => panic!("value 2connu"),
-        }
+        self.put_on_target(target,value);
 
         // Update the flags.
         self.registers.f.zero = value == 0;
@@ -1587,10 +1517,6 @@ impl CPU {
         }
     }
 
-    pub fn jump_indirect(&mut self) {
-        let address = self.registers.get_hl(); // Obtenir la valeur de HL (adresse à sauter)
-        self.pc = address; // Copier l'adresse dans le PC
-    }
 
     pub fn return_(&mut self, should_jump: bool) -> u16 {
         if should_jump {
@@ -1643,7 +1569,7 @@ impl CPU {
             let flag = 1 << (flag_number as u8);
             if interruption & flag > 0 {
                 //println!("interrutpion : {:b} interrutpion : {:b}",interruption,flag);
-                self.bus.reset_interrupt(flag);
+                self.bus.interrupt_flags &= !flag;
                 let old_pc = self.pc;
                 self.push(old_pc);
                 self.pc = *interrupt_jump_address;
@@ -1653,5 +1579,32 @@ impl CPU {
         panic!("Unknown interrupt was not handled! 0b{:08b}", interruption);
     }
 
+
+    fn getjump_condition(&self, test:JumpTest) -> bool{
+        match test {
+            JumpTest::NotZero => !self.registers.f.zero,
+            JumpTest::NotCarry => !self.registers.f.carry,
+            JumpTest::Zero => self.registers.f.zero,
+            JumpTest::Carry => self.registers.f.carry,
+            JumpTest::Always => true,
+        }
+    }
+
+    fn put_on_target(&mut self, target:ArithmeticTarget, value:u8){
+        match target {
+            ArithmeticTarget::A => self.registers.a = value,
+            ArithmeticTarget::B => self.registers.b = value,
+            ArithmeticTarget::C => self.registers.c = value,
+            ArithmeticTarget::D => self.registers.d = value,
+            ArithmeticTarget::E => self.registers.e = value,
+            ArithmeticTarget::H => self.registers.h = value,
+            ArithmeticTarget::L => self.registers.l = value,
+            ArithmeticTarget::AddressHL => {
+            let address = self.registers.get_hl();
+            self.bus.write_byte(address, value); // Write the new value back to memory.
+            },
+            _ => panic!("value 2connu"),
+        }
+    }
 }
 

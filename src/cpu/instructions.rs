@@ -17,7 +17,7 @@ pub enum LoadType {
 }
 
 pub enum LoadByteTarget{
-    A, B, C, D, E, H, L, AddressHL, AddressBC, AddressDE, AddressHLP, AddressHLM, AddressC, Address16, Address8
+    A, B, C, D, E, H, L, AddressHL, AddressDE, AddressHLP, AddressHLM, AddressC, Address16, Address8
 }
 
 pub enum LoadByteSource{
@@ -43,7 +43,7 @@ pub enum Instruction {
     NOP,
     ADD(ArithmeticTarget),
     ADDHL(ArithmeticTarget),
-    ADDSP(ArithmeticTarget),
+    ADDSP(),
     ADC(ArithmeticTarget),
     SUB(ArithmeticTarget),
     SBC(ArithmeticTarget),
@@ -77,7 +77,7 @@ pub enum Instruction {
     JP(JumpTest, JumpCondition),
     PUSH(StackTarget),
     POP(StackTarget),
-    CALL(JumpTest, JumpCondition),
+    CALL(JumpTest),
     RET(JumpTest),
     JR(JumpTest),
     RETI,
@@ -91,7 +91,7 @@ pub enum Instruction {
 
 #[derive(Debug)]
 pub enum ArithmeticTarget {
-    A, B, C, D, E, H, L, HL, AF, BC, DE, SP, AddressHL, D8
+    A, B, C, D, E, H, L, HL, BC, DE, SP, AddressHL, D8
 }
 
 
@@ -99,57 +99,9 @@ impl Instruction {
     pub fn from_byte(byte: u8, prefixed: bool) -> (Option<Instruction>,u8) {
         
         if prefixed {
-            //Self::print_debug_prefixed(byte);
-            
             Instruction::from_byte_prefixed(byte)
         } else {
-            //Self::print_debug(byte);
             Instruction::from_byte_not_prefixed(byte)
-        }
-    }
-
-
-    pub fn print_debug(byte: u8) {
-        match byte {
-            0x00 => println!("NOP"), 0x01 => println!("LD BC, d16"), 0x02 => println!("LD (BC), A"), 0x03 => println!("INC BC"), 0x04 => println!("INC B"), 0x05 => println!("DEC B"), 0x06 => println!("LD B, d8"), 0x07 => println!("RLCA"), 0x08 => println!("LD (a16), SP"), 0x09 => println!("ADD HL, BC"), 0x0A => println!("LD A, (BC)"), 0x0B => println!("DEC BC"), 0x0C => println!("INC C"), 0x0D => println!("DEC C"), 0x0E => println!("LD C, d8"), 0x0F => println!("RRCA"),
-            0x10 => println!("STOP"), 0x11 => println!("LD DE, d16"), 0x12 => println!("LD (DE), A"), 0x13 => println!("INC DE"), 0x14 => println!("INC D"), 0x15 => println!("DEC D"), 0x16 => println!("LD D, d8"), 0x17 => println!("RLA"), 0x18 => println!("JR r8"), 0x19 => println!("ADD HL, DE"), 0x1A => println!("LD A, (DE)"), 0x1B => println!("DEC DE"), 0x1C => println!("INC E"), 0x1D => println!("DEC E"), 0x1E => println!("LD E, d8"), 0x1F => println!("RRA"),
-            0x20 => println!("JR NZ, r8"), 0x21 => println!("LD HL, d16"), 0x22 => println!("LDI (HL), A"), 0x23 => println!("INC HL"), 0x24 => println!("INC H"), 0x25 => println!("DEC H"), 0x26 => println!("LD H, d8"), 0x27 => println!("DAA"), 0x28 => println!("JR Z, r8"), 0x29 => println!("ADD HL, HL"), 0x2A => println!("LDI A, (HL)"), 0x2B => println!("DEC HL"), 0x2C => println!("INC L"), 0x2D => println!("DEC L"), 0x2E => println!("LD L, d8"), 0x2F => println!("CPL"),
-            0x30 => println!("JR NC, r8"), 0x31 => println!("LD SP, d16"), 0x32 => println!("LDD (HL), A"), 0x33 => println!("INC SP"), 0x34 => println!("INC (HL)"), 0x35 => println!("DEC (HL)"), 0x36 => println!("LD (HL), d8"), 0x37 => println!("SCF"), 0x38 => println!("JR C, r8"), 0x39 => println!("ADD HL, SP"), 0x3A => println!("LDD A, (HL)"), 0x3B => println!("DEC SP"), 0x3C => println!("INC A"), 0x3D => println!("DEC A"), 0x3E => println!("LD A, d8"), 0x3F => println!("CCF"),
-            0x40 => println!("LD B, B"), 0x41 => println!("LD B, C"), 0x42 => println!("LD B, D"), 0x43 => println!("LD B, E"), 0x44 => println!("LD B, H"), 0x45 => println!("LD B, L"), 0x46 => println!("LD B, (HL)"), 0x47 => println!("LD B, A"), 0x48 => println!("LD C, B"), 0x49 => println!("LD C, C"), 0x4A => println!("LD C, D"), 0x4B => println!("LD C, E"), 0x4C => println!("LD C, H"), 0x4D => println!("LD C, L"), 0x4E => println!("LD C, (HL)"), 0x4F => println!("LD C, A"),
-            0x50 => println!("LD D, B"), 0x51 => println!("LD D, C"), 0x52 => println!("LD D, D"), 0x53 => println!("LD D, E"), 0x54 => println!("LD D, H"), 0x55 => println!("LD D, L"), 0x56 => println!("LD D, (HL)"), 0x57 => println!("LD D, A"), 0x58 => println!("LD E, B"), 0x59 => println!("LD E, C"), 0x5A => println!("LD E, D"), 0x5B => println!("LD E, E"), 0x5C => println!("LD E, H"), 0x5D => println!("LD E, L"), 0x5E => println!("LD E, (HL)"), 0x5F => println!("LD E, A"),
-            0x60 => println!("LD H, B"), 0x61 => println!("LD H, C"), 0x62 => println!("LD H, D"), 0x63 => println!("LD H, E"), 0x64 => println!("LD H, H"), 0x65 => println!("LD H, L"), 0x66 => println!("LD H, (HL)"), 0x67 => println!("LD H, A"), 0x68 => println!("LD L, B"), 0x69 => println!("LD L, C"), 0x6A => println!("LD L, D"), 0x6B => println!("LD L, E"), 0x6C => println!("LD L, H"), 0x6D => println!("LD L, L"), 0x6E => println!("LD L, (HL)"), 0x6F => println!("LD L, A"),
-            0x70 => println!("LD (HL), B"), 0x71 => println!("LD (HL), C"), 0x72 => println!("LD (HL), D"), 0x73 => println!("LD (HL), E"), 0x74 => println!("LD (HL), H"), 0x75 => println!("LD (HL), L"), 0x76 => println!("HALT"), 0x77 => println!("LD (HL), A"), 0x78 => println!("LD A, B"), 0x79 => println!("LD A, C"), 0x7A => println!("LD A, D"), 0x7B => println!("LD A, E"), 0x7C => println!("LD A, H"), 0x7D => println!("LD A, L"), 0x7E => println!("LD A, (HL)"), 0x7F => println!("LD A, A"),
-            0x80 => println!("ADD A, B"), 0x81 => println!("ADD A, C"), 0x82 => println!("ADD A, D"), 0x83 => println!("ADD A, E"), 0x84 => println!("ADD A, H"), 0x85 => println!("ADD A, L"), 0x86 => println!("ADD A, (HL)"), 0x87 => println!("ADD A, A"), 0x88 => println!("ADC A, B"), 0x89 => println!("ADC A, C"), 0x8A => println!("ADC A, D"), 0x8B => println!("ADC A, E"), 0x8C => println!("ADC A, H"), 0x8D => println!("ADC A, L"), 0x8E => println!("ADC A, (HL)"), 0x8F => println!("ADC A, A"),
-            0x90 => println!("SUB B"), 0x91 => println!("SUB C"), 0x92 => println!("SUB D"), 0x93 => println!("SUB E"), 0x94 => println!("SUB H"), 0x95 => println!("SUB L"), 0x96 => println!("SUB (HL)"), 0x97 => println!("SUB A"), 0x98 => println!("SBC A, B"), 0x99 => println!("SBC A, C"), 0x9A => println!("SBC A, D"), 0x9B => println!("SBC A, E"), 0x9C => println!("SBC A, H"), 0x9D => println!("SBC A, L"), 0x9E => println!("SBC A, (HL)"), 0x9F => println!("SBC A, A"),
-            0xA0 => println!("AND B"), 0xA1 => println!("AND C"), 0xA2 => println!("AND D"), 0xA3 => println!("AND E"), 0xA4 => println!("AND H"), 0xA5 => println!("AND L"), 0xA6 => println!("AND (HL)"), 0xA7 => println!("AND A"), 0xA8 => println!("XOR B"), 0xA9 => println!("XOR C"), 0xAA => println!("XOR D"), 0xAB => println!("XOR E"), 0xAC => println!("XOR H"), 0xAD => println!("XOR L"), 0xAE => println!("XOR (HL)"), 0xAF => println!("XOR A"),
-            0xB0 => println!("OR B"), 0xB1 => println!("OR C"), 0xB2 => println!("OR D"), 0xB3 => println!("OR E"), 0xB4 => println!("OR H"), 0xB5 => println!("OR L"), 0xB6 => println!("OR (HL)"), 0xB7 => println!("OR A"), 0xB8 => println!("CP B"), 0xB9 => println!("CP C"), 0xBA => println!("CP D"), 0xBB => println!("CP E"), 0xBC => println!("CP H"), 0xBD => println!("CP L"), 0xBE => println!("CP (HL)"), 0xBF => println!("CP A"),
-            0xC0 => println!("RET NZ"), 0xC1 => println!("POP BC"), 0xC2 => println!("JP NZ, a16"), 0xC3 => println!("JP a16"), 0xC4 => println!("CALL NZ, a16"), 0xC5 => println!("PUSH BC"), 0xC6 => println!("ADD A, d8"), 0xC7 => println!("RST 00H"), 0xC8 => println!("RET Z"), 0xC9 => println!("RET"), 0xCA => println!("JP Z, a16"), 0xCC => println!("CALL Z, a16"), 0xCD => println!("CALL a16"), 0xCE => println!("ADC A, d8"), 0xCF => println!("RST 08H"),
-            0xD0 => println!("RET NC"), 0xD1 => println!("POP DE"), 0xD2 => println!("JP NC, a16"), 0xD4 => println!("CALL NC, a16"), 0xD5 => println!("PUSH DE"), 0xD6 => println!("SUB d8"), 0xD7 => println!("RST 10H"), 0xD8 => println!("RET C"), 0xD9 => println!("RETI"), 0xDA => println!("JP C, a16"), 0xDC => println!("CALL C, a16"), 0xDE => println!("SBC A, d8"), 0xDF => println!("RST 18H"),
-            0xE0 => println!("LDH (a8), A"), 0xE1 => println!("POP HL"), 0xE2 => println!("LD (C), A"), 0xE5 => println!("PUSH HL"), 0xE6 => println!("AND d8"), 0xE7 => println!("RST 20H"), 0xE8 => println!("ADD SP, r8"), 0xE9 => println!("JP (HL)"), 0xEA => println!("LD (a16), A"), 0xEE => println!("XOR d8"), 0xEF => println!("RST 28H"),
-            0xF0 => println!("LDH A, (a8)"), 0xF1 => println!("POP AF"), 0xF2 => println!("LD A, (C)"), 0xF3 => println!("DI"), 0xF5 => println!("PUSH AF"), 0xF6 => println!("OR d8"), 0xF7 => println!("RST 30H"), 0xF8 => println!("LD HL, SP+r8"), 0xF9 => println!("LD SP, HL"), 0xFA => println!("LD A, (a16)"), 0xFB => println!("EI"), 0xFE => println!("CP d8"), 0xFF => println!("RST 38H"),
-            _ => {}
-        }
-    }
-
-    pub fn print_debug_prefixed(byte: u8) {
-        match byte {
-            0x00 => println!("Prefix: RLC B"), 0x01 => println!("Prefix: RLC C"), 0x02 => println!("Prefix: RLC D"), 0x03 => println!("Prefix: RLC E"), 0x04 => println!("Prefix: RLC H"), 0x05 => println!("Prefix: RLC L"), 0x06 => println!("Prefix: RLC (HL)"), 0x07 => println!("Prefix: RLC A"), 0x08 => println!("Prefix: RRC B"), 0x09 => println!("Prefix: RRC C"), 0x0a => println!("Prefix: RRC D"), 0x0b => println!("Prefix: RRC E"), 0x0c => println!("Prefix: RRC H"), 0x10 => println!("Prefix: RL B"), 0x11 => println!("Prefix: RL C"), 0x12 => println!("Prefix: RL D"),
-            0x13 => println!("Prefix: RL E"), 0x14 => println!("Prefix: RL H"), 0x15 => println!("Prefix: RL L"), 0x16 => println!("Prefix: RL (HL)"), 0x17 => println!("Prefix: RL A"), 0x18 => println!("Prefix: RR B"), 0x19 => println!("Prefix: RR C"), 0x1a => println!("Prefix: RR D"), 0x1b => println!("Prefix: RR E"), 0x0d => println!("Prefix: Prefix: RRC L"), 0x0e => println!("Prefix: Prefix: RRC (HL)"), 0x0f => println!("Prefix: Prefix: RRC A"), 0x1c => println!("Prefix: RR H"), 0x1d => println!("Prefix: RR L"), 0x1e => println!("Prefix: RR (HL)"), 0x1f => println!("Prefix: RR A"),
-            0x20 => println!("Prefix: SLA B"), 0x21 => println!("Prefix: SLA C"), 0x22 => println!("Prefix: SLA D"), 0x23 => println!("Prefix: SLA E"), 0x24 => println!("Prefix: SLA H"), 0x25 => println!("Prefix: SLA L"), 0x26 => println!("Prefix: SLA (HL)"), 0x27 => println!("Prefix: SLA A"), 0x28 => println!("Prefix: SRA B"), 0x29 => println!("Prefix: SRA C"), 0x2a => println!("Prefix: SRA D"), 0x2b => println!("Prefix: SRA E"), 0x2c => println!("Prefix: SRA H"), 0x2d => println!("Prefix: SRA L"), 0x2e => println!("Prefix: SRA (HL)"), 0x2f => println!("Prefix: SRA A"),
-            0x30 => println!("Prefix: SWAP B"), 0x31 => println!("Prefix: SWAP C"), 0x32 => println!("Prefix: SWAP D"), 0x33 => println!("Prefix: SWAP E"), 0x34 => println!("Prefix: SWAP H"), 0x35 => println!("Prefix: SWAP L"), 0x36 => println!("Prefix: SWAP (HL)"), 0x37 => println!("Prefix: SWAP A"), 0x38 => println!("Prefix: SRL B"), 0x39 => println!("Prefix: SRL C"), 0x3a => println!("Prefix: SRL D"), 0x3b => println!("Prefix: SRL E"), 0x3c => println!("Prefix: SRL H"), 0x3d => println!("Prefix: SRL L"), 0x3e => println!("Prefix: SRL (HL)"), 0x3f => println!("Prefix: SRL A"),
-            0x40 => println!("Prefix: BIT 0, B"), 0x41 => println!("Prefix: BIT 0, C"), 0x42 => println!("Prefix: BIT 0, D"), 0x43 => println!("Prefix: BIT 0, E"), 0x44 => println!("Prefix: BIT 0, H"), 0x45 => println!("Prefix: BIT 0, L"), 0x46 => println!("Prefix: BIT 0, (HL)"), 0x47 => println!("Prefix: BIT 0, A"), 0x48 => println!("Prefix: BIT 1, B"), 0x49 => println!("Prefix: BIT 1, C"), 0x4a => println!("Prefix: BIT 1, D"), 0x4b => println!("Prefix: BIT 1, E"), 0x4c => println!("Prefix: BIT 1, H"), 0x4d => println!("Prefix: BIT 1, L"), 0x4e => println!("Prefix: BIT 1, (HL)"), 0x4f => println!("Prefix: BIT 1, A"),
-            0x50 => println!("Prefix: BIT 2, B"), 0x51 => println!("Prefix: BIT 2, C"), 0x52 => println!("Prefix: BIT 2, D"), 0x53 => println!("Prefix: BIT 2, E"), 0x54 => println!("Prefix: BIT 2, H"), 0x55 => println!("Prefix: BIT 2, L"), 0x56 => println!("Prefix: BIT 2, (HL)"), 0x57 => println!("Prefix: BIT 2, A"), 0x58 => println!("Prefix: BIT 3, B"), 0x59 => println!("Prefix: BIT 3, C"), 0x5a => println!("Prefix: BIT 3, D"), 0x5b => println!("Prefix: BIT 3, E"), 0x5c => println!("Prefix: BIT 3, H"), 0x5d => println!("Prefix: BIT 3, L"), 0x5e => println!("Prefix: BIT 3, (HL)"), 0x5f => println!("Prefix: BIT 3, A"),
-            0x60 => println!("Prefix: BIT 4, B"), 0x61 => println!("Prefix: BIT 4, C"), 0x62 => println!("Prefix: BIT 4, D"), 0x63 => println!("Prefix: BIT 4, E"), 0x64 => println!("Prefix: BIT 4, H"), 0x65 => println!("Prefix: BIT 4, L"), 0x66 => println!("Prefix: BIT 4, (HL)"), 0x67 => println!("Prefix: BIT 4, A"), 0x68 => println!("Prefix: BIT 5, B"), 0x69 => println!("Prefix: BIT 5, C"), 0x6a => println!("Prefix: BIT 5, D"), 0x6b => println!("Prefix: BIT 5, E"), 0x6c => println!("Prefix: BIT 5, H"), 0x6d => println!("Prefix: BIT 5, L"), 0x6e => println!("Prefix: BIT 5, (HL)"), 0x6f => println!("Prefix: BIT 5, A"),
-            0x70 => println!("Prefix: BIT 6, B"), 0x71 => println!("Prefix: BIT 6, C"), 0x72 => println!("Prefix: BIT 6, D"), 0x73 => println!("Prefix: BIT 6, E"), 0x74 => println!("Prefix: BIT 6, H"), 0x75 => println!("Prefix: BIT 6, L"), 0x76 => println!("Prefix: BIT 6, (HL)"), 0x77 => println!("Prefix: BIT 6, A"), 0x78 => println!("Prefix: BIT 7, B"), 0x79 => println!("Prefix: BIT 7, C"), 0x7a => println!("Prefix: BIT 7, D"), 0x7b => println!("Prefix: BIT 7, E"), 0x7c => println!("Prefix: BIT 7, H"), 0x7d => println!("Prefix: BIT 7, L"), 0x7e => println!("Prefix: BIT 7, (HL)"), 0x7f => println!("Prefix: BIT 7, A"),
-            0x80 => println!("Prefix: RES 0, B"), 0x81 => println!("Prefix: RES 0, C"), 0x82 => println!("Prefix: RES 0, D"), 0x83 => println!("Prefix: RES 0, E"), 0x84 => println!("Prefix: RES 0, H"), 0x85 => println!("Prefix: RES 0, L"), 0x86 => println!("Prefix: RES 0, (HL)"), 0x87 => println!("Prefix: RES 0, A"), 0x88 => println!("Prefix: RES 1, B"), 0x89 => println!("Prefix: RES 1, C"), 0x8a => println!("Prefix: RES 1, D"), 0x8b => println!("Prefix: RES 1, E"), 0x8c => println!("Prefix: RES 1, H"), 0x8d => println!("Prefix: RES 1, L"), 0x8e => println!("Prefix: RES 1, (HL)"), 0x8f => println!("Prefix: RES 1, A"),
-            0x90 => println!("Prefix: RES 2, B"), 0x91 => println!("Prefix: RES 2, C"), 0x92 => println!("Prefix: RES 2, D"), 0x93 => println!("Prefix: RES 2, E"), 0x94 => println!("Prefix: RES 2, H"), 0x95 => println!("Prefix: RES 2, L"), 0x96 => println!("Prefix: RES 2, (HL)"), 0x97 => println!("Prefix: RES 2, A"), 0x98 => println!("Prefix: RES 3, B"), 0x99 => println!("Prefix: RES 3, C"), 0x9a => println!("Prefix: RES 3, D"), 0x9b => println!("Prefix: RES 3, E"), 0x9c => println!("Prefix: RES 3, H"), 0x9d => println!("Prefix: RES 3, L"), 0x9e => println!("Prefix: RES 3, (HL)"), 0x9f => println!("Prefix: RES 3, A"),
-            0xa0 => println!("Prefix: RES 4, B"), 0xa1 => println!("Prefix: RES 4, C"), 0xa2 => println!("Prefix: RES 4, D"), 0xa3 => println!("Prefix: RES 4, E"), 0xa4 => println!("Prefix: RES 4, H"), 0xa5 => println!("Prefix: RES 4, L"), 0xa6 => println!("Prefix: RES 4, (HL)"), 0xa7 => println!("Prefix: RES 4, A"), 0xa8 => println!("Prefix: RES 5, B"), 0xa9 => println!("Prefix: RES 5, C"), 0xaa => println!("Prefix: RES 5, D"), 0xab => println!("Prefix: RES 5, E"), 0xac => println!("Prefix: RES 5, H"), 0xad => println!("Prefix: RES 5, L"), 0xae => println!("Prefix: RES 5, (HL)"), 0xaf => println!("Prefix: RES 5, A"),
-            0xb0 => println!("Prefix: RES 6, B"), 0xb1 => println!("Prefix: RES 6, C"), 0xb2 => println!("Prefix: RES 6, D"), 0xb3 => println!("Prefix: RES 6, E"), 0xb4 => println!("Prefix: RES 6, H"), 0xb5 => println!("Prefix: RES 6, L"), 0xb6 => println!("Prefix: RES 6, (HL)"), 0xb7 => println!("Prefix: RES 6, A"), 0xb8 => println!("Prefix: RES 7, B"), 0xb9 => println!("Prefix: RES 7, C"), 0xba => println!("Prefix: RES 7, D"), 0xbb => println!("Prefix: RES 7, E"), 0xbc => println!("Prefix: RES 7, H"), 0xbd => println!("Prefix: RES 7, L"), 0xbe => println!("Prefix: RES 7, (HL)"), 0xbf => println!("Prefix: RES 7, A"),
-            0xc0 => println!("Prefix: SET 0, B"), 0xc1 => println!("Prefix: SET 0, C"), 0xc2 => println!("Prefix: SET 0, D"), 0xc3 => println!("Prefix: SET 0, E"), 0xc4 => println!("Prefix: SET 0, H"), 0xc5 => println!("Prefix: SET 0, L"), 0xc6 => println!("Prefix: SET 0, (HL)"), 0xc7 => println!("Prefix: SET 0, A"), 0xc8 => println!("Prefix: SET 1, B"), 0xc9 => println!("Prefix: SET 1, C"), 0xca => println!("Prefix: SET 1, D"), 0xcb => println!("Prefix: SET 1, E"), 0xcc => println!("Prefix: SET 1, H"), 0xcd => println!("Prefix: SET 1, L"), 0xce => println!("Prefix: SET 1, (HL)"), 0xcf => println!("Prefix: SET 1, A"),
-            0xd0 => println!("Prefix: SET 2, B"), 0xd1 => println!("Prefix: SET 2, C"), 0xd2 => println!("Prefix: SET 2, D"), 0xd3 => println!("Prefix: SET 2, E"), 0xd4 => println!("Prefix: SET 2, H"), 0xd5 => println!("Prefix: SET 2, L"), 0xd6 => println!("Prefix: SET 2, (HL)"), 0xd7 => println!("Prefix: SET 2, A"), 0xd8 => println!("Prefix: SET 3, B"), 0xd9 => println!("Prefix: SET 3, C"), 0xda => println!("Prefix: SET 3, D"), 0xdb => println!("Prefix: SET 3, E"), 0xdc => println!("Prefix: SET 3, H"), 0xdd => println!("Prefix: SET 3, L"), 0xde => println!("Prefix: SET 3, (HL)"), 0xdf => println!("Prefix: SET 3, A"),
-            0xe0 => println!("Prefix: SET 4, B"), 0xe1 => println!("Prefix: SET 4, C"), 0xe2 => println!("Prefix: SET 4, D"), 0xe3 => println!("Prefix: SET 4, E"), 0xe4 => println!("Prefix: SET 4, H"), 0xe5 => println!("Prefix: SET 4, L"), 0xe6 => println!("Prefix: SET 4, (HL)"), 0xe7 => println!("Prefix: SET 4, A"), 0xe8 => println!("Prefix: SET 5, B"), 0xe9 => println!("Prefix: SET 5, C"), 0xea => println!("Prefix: SET 5, D"), 0xeb => println!("Prefix: SET 5, E"), 0xec => println!("Prefix: SET 5, H"), 0xed => println!("Prefix: SET 5, L"), 0xee => println!("Prefix: SET 5, (HL)"), 0xef => println!("Prefix: SET 5, A"),
-            0xf0 => println!("Prefix: SET 6, B"), 0xf1 => println!("Prefix: SET 6, C"), 0xf2 => println!("Prefix: SET 6, D"), 0xf3 => println!("Prefix: SET 6, E"), 0xf4 => println!("Prefix: SET 6, H"), 0xf5 => println!("Prefix: SET 6, L"), 0xf6 => println!("Prefix: SET 6, (HL)"), 0xf7 => println!("Prefix: SET 6, A"), 0xf8 => println!("Prefix: SET 7, B"), 0xf9 => println!("Prefix: SET 7, C"), 0xfa => println!("Prefix: SET 7, D"), 0xfb => println!("Prefix: SET 7, E"), 0xfc => println!("Prefix: SET 7, H"), 0xfd => println!("Prefix: SET 7, L"), 0xfe => println!("Prefix: SET 7, (HL)"), 0xff => println!("Prefix: SET 7, A"),
-            _ => {}
         }
     }
 
@@ -459,7 +411,6 @@ impl Instruction {
             0xFD => (Some(Instruction::SET(ArithmeticTarget::L, 7)),2),
             0xFE => (Some(Instruction::SET(ArithmeticTarget::AddressHL, 7)),4),
             0xFF => (Some(Instruction::SET(ArithmeticTarget::A, 7)),2),
-            _ =>  (None,0)
         }
     }
 
@@ -673,7 +624,7 @@ impl Instruction {
             0xC1 => (Some(Instruction::POP(StackTarget::BC)),3),
             0xC2 => (Some(Instruction::JP(JumpTest::NotZero, JumpCondition::Address16)),3),
             0xC3 => (Some(Instruction::JP(JumpTest::Always, JumpCondition::Address16)),3),
-            0xC4 => (Some(Instruction::CALL(JumpTest::NotZero, JumpCondition::Address16)),3),
+            0xC4 => (Some(Instruction::CALL(JumpTest::NotZero)),3),
             0xC5 => (Some(Instruction::PUSH(StackTarget::BC)),4),
             0xC6 => (Some(Instruction::ADD(ArithmeticTarget::D8)),2),
             0xC7 => (Some(Instruction::RST(RstTarget::Rst00H)),4),
@@ -681,22 +632,22 @@ impl Instruction {
             0xC9 => (Some(Instruction::RET(JumpTest::Always)),1),
             0xCA => (Some(Instruction::JP(JumpTest::Zero, JumpCondition::Address16)),3),
             0xCB => (Some(Instruction::PrefixCB),1),
-            0xCC => (Some(Instruction::CALL(JumpTest::Zero, JumpCondition::Address16)),3),
-            0xCD => (Some(Instruction::CALL(JumpTest::Always, JumpCondition::Address16)),3),
+            0xCC => (Some(Instruction::CALL(JumpTest::Zero)),3),
+            0xCD => (Some(Instruction::CALL(JumpTest::Always)),3),
             0xCE => (Some(Instruction::ADC(ArithmeticTarget::D8)),2),
             0xCF => (Some(Instruction::RST(RstTarget::Rst08H)),4),
                                                                                                                                                                                                                                                                                                                                                                                                                                                         
             0xD0 => (Some(Instruction::RET(JumpTest::NotCarry)),2),
             0xD1 => (Some(Instruction::POP(StackTarget::DE)),3),
             0xD2 => (Some(Instruction::JP(JumpTest::NotCarry, JumpCondition::Address16)),3),
-            0xD4 => (Some(Instruction::CALL(JumpTest::NotCarry, JumpCondition::Address16)),3),
+            0xD4 => (Some(Instruction::CALL(JumpTest::NotCarry)),3),
             0xD5 => (Some(Instruction::PUSH(StackTarget::DE)),4),
             0xD6 => (Some(Instruction::SUB(ArithmeticTarget::D8)),2),
             0xD7 => (Some(Instruction::RST(RstTarget::Rst10H)),4),
             0xD8 => (Some(Instruction::RET(JumpTest::Carry)),2),
             0xD9 => (Some(Instruction::RETI),4),
             0xDA => (Some(Instruction::JP(JumpTest::Carry, JumpCondition::Address16)),3),
-            0xDC => (Some(Instruction::CALL(JumpTest::Carry, JumpCondition::Address16)),3),
+            0xDC => (Some(Instruction::CALL(JumpTest::Carry)),3),
             0xDE => (Some(Instruction::SBC(ArithmeticTarget::D8)),2),
             0xDF => (Some(Instruction::RST(RstTarget::Rst18H)),4),
                                                                                                                                                                                                                                                                                                                                                                                                                                                         
@@ -706,7 +657,7 @@ impl Instruction {
             0xE5 => (Some(Instruction::PUSH(StackTarget::HL)),4),
             0xE6 => (Some(Instruction::AND(ArithmeticTarget::D8)),2),
             0xE7 => (Some(Instruction::RST(RstTarget::Rst20H)),4),
-            0xE8 => (Some(Instruction::ADDSP(ArithmeticTarget::D8)),4),
+            0xE8 => (Some(Instruction::ADDSP()),4),
             0xE9 => (Some(Instruction::JP(JumpTest::Always, JumpCondition::AddressHL)),1),
             0xEA => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::Address16, LoadByteSource::A))),4),
             0xEE => (Some(Instruction::XOR(ArithmeticTarget::D8)),2),
@@ -725,7 +676,7 @@ impl Instruction {
             0xFB => (Some(Instruction::EI),1),
             0xFE => (Some(Instruction::CP(ArithmeticTarget::D8)),2),
             0xFF => (Some(Instruction::RST(RstTarget::Rst38H)),4),
-            _ => (None,0)
+            _ => {panic!("unknown prefixed instruction")}
         }
     }
 }

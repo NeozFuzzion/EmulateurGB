@@ -1,40 +1,35 @@
 
 use std::{fs::File, thread};
-use std::io::{Write, Seek, SeekFrom, Read};
-use std::fs::OpenOptions;
+use std::io::{Read};
 use std::sync::mpsc;
 
-use CPU::registres::Registers;
+use cpu::registres::Registers;
 
-mod CPU;
-mod Memory;
-mod GPU;
+mod cpu;
+mod memory;
+mod gpu;
 mod render;
 mod input;
 
 extern crate glium;
 extern crate glutin;
-use glium::{ Surface, Display, Frame, Program, VertexBuffer, implement_vertex, uniform};
-use glium::uniforms::{Uniforms, UniformValue, AsUniformValue};
-use std::io::prelude::*;
-use std::time::{Duration, SystemTime};
-use crate::CPU::clock::Clock;
-use crate::CPU::cpu;
+use std::time::{SystemTime};
+use crate::cpu::clock::Clock;
 
 fn main() {
     let reg=Registers ::new();
 
-    let mut input_file = File::open("D:/Prog/Tetris.gb").expect("gameboy rom file");
+    let mut input_file = File::open("D:/Prog/snake.gb").expect("gameboy rom file");
     let mut bytes = [0;0xFFFF];
     input_file.read(&mut bytes).expect("read bytes from file");
 
     let (tx     , rx) = mpsc::channel();
     let (key_sender, key_receiver) = mpsc::channel();
 
-    let mut cpu = CPU::cpu::CPU{
+    let mut cpu = cpu::cpu::CPU{
         registers: reg,
         pc: 0x0100,
-        bus: Memory::memory::MemoryBus{ memory: bytes, interrupt_flags: 0, interrupt_enabled: 0, wram: [0_u8; 0x2000],  hram: [0_u8; 0x80], gpu: GPU::gpu::GPU::new(),screen_sender: tx, input: input::Input::new(key_receiver), clock: Clock::default() },
+        bus: memory::memory::MemoryBus{ memory: bytes, interrupt_flags: 0, interrupt_enabled: 0, wram: [0_u8; 0x2000],  hram: [0_u8; 0x80], gpu: gpu::gpu::GPU::new(),screen_sender: tx, input: input::Input::new(key_receiver), clock: Clock::default() },
         sp: 0xFFFE,
         halt: false,
         interrupt_master_enable: true,
@@ -42,13 +37,7 @@ fn main() {
         di:0,
         cycle:0,
     };
-    // Créez ou ouvrez le fichier de sortie pour écriture
-    let mut output_file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open("output3.txt")
-        .expect("output file");
-    let mut x = 1;
+
     let mut window_game = render::Renderer::new(
         "Wow une image",
         3,
@@ -57,15 +46,17 @@ fn main() {
     );
 
     let cpu_thread = thread::spawn(move || {
-        let mut tot_cycle=0_u32;
         let mut now = SystemTime::now();
         loop {
-            if tot_cycle>=cpu::CPU::CPU_FREQ/100 {
-                thread::sleep(std::time::Duration::from_millis(10));
-                tot_cycle-=cpu::CPU::CPU_FREQ/100;
-                now=SystemTime::now();
+            // each cycle take around 238 ns because in 1s 4 194 304 cycle are made not most accurate but my pov on it
+            let timed_cycle=cpu.run()as u128*238*4;
+            let mut difference=SystemTime::now().duration_since(now).expect("Le temps actuel est antérieur au temps de départ.").as_nanos();
+
+            //wait until the cpu catch our
+            while difference<timed_cycle{
+                difference= SystemTime::now().duration_since(now).expect("Le temps actuel est antérieur au temps de départ.").as_nanos();
             }
-                tot_cycle+=cpu.run()as u32*4 ;
+            now = SystemTime::now();
         }
     });
 
@@ -75,7 +66,7 @@ fn main() {
 
 
     if let Err(e) = cpu_thread.join() {
-        panic!("Error: Failed to join CPU thread: {:?}", e);
+        panic!("Error: Failed to join cpu thread: {:?}", e);
     }
 
 }

@@ -1,8 +1,8 @@
 use core::panic;
 use std::sync::mpsc::Sender;
-use crate::CPU::clock::Clock;
+use crate::cpu::clock::Clock;
 
-use crate::GPU::gpu::GPU;
+use crate::gpu::gpu::GPU;
 use crate::input::Input;
 
 pub struct MemoryBus {
@@ -23,7 +23,7 @@ impl MemoryBus {
         //println!("Hram : {:x}",self.hram[(address & 0x7F) as usize]);
         match address {
             0x0000..=0x7FFF | 0xA000..=0xBFFF => self.memory[address as usize], // ROM and cart RAM
-            0x8000..=0x9FFF => self.gpu.read_vram(address),             // Load from GPU
+            0x8000..=0x9FFF => self.gpu.read_vram(address),             // Load from gpu
             0xC000..=0xFDFF => self.wram[(address & 0x1FFF) as usize],        // Working RAM
             0xFE00..=0xFE9F =>  self.gpu.read_oam(address),                    // Graphics - sprite information
             0xFF00 => self.input.read(),                                   // Input read
@@ -33,7 +33,7 @@ impl MemoryBus {
             //0xFF10..=0xFF26 => panic!("RSound"),                 // Sound control
             //0xFF30..=0xFF3F => panic!("RSound"),                 // Sound wave pattern RAM
             0xFF40..=0xFF4B => self.gpu.read_lcd_reg(address),
-            0xFF4C..=0xFF7F => panic!("MMU ERROR: Memory mapped I/O (read) (CGB only) not implemented"),
+            0xFF4C..=0xFF7F => panic!("MMU ERROR: memory mapped I/O (read) (CGB only) not implemented"),
             0xFF80..=0xFFFE =>self.hram[(address & 0x7F) as usize], // High RAM
             0xFFFF => self.interrupt_enabled,                     // Interrupt enable
             _ => 0,
@@ -41,13 +41,10 @@ impl MemoryBus {
     }
 
     pub fn write_byte(&mut self, address: u16, byte: u8) {
-        if address==0x2000{
-            println!("stop {}",byte);
-        }
         //println!("{:x}",address);
         match address {
             //0x0000..=0x7FFF | 0xA000..=0xBFFF => self.memory[address as usize]=byte,                            // ROM and cart RAM
-            0x8000..=0x9FFF => self.gpu.write_vram(address,byte),                                         // Write to GPU
+            0x8000..=0x9FFF => self.gpu.write_vram(address,byte),                                         // Write to gpu
             0xC000..=0xFDFF => self.wram[(address & 0x1FFF) as usize] = byte,                                   // Working RAM
             0xFE00..=0xFE9F => self.gpu.write_oam(address,byte),                                          // Graphics - sprite information
             0xFF00 =>       self.input.write(byte),                                             // Input write
@@ -59,7 +56,7 @@ impl MemoryBus {
             0xFF46 => self.dma_into_oam(byte),
             0xFF40..=0xFF45 | 0xFF47..=0xFF4B => self.gpu.write_lcd_reg(address,byte),
             /*0xFF4C..=0xFF7F => panic!(
-                "MMU ERROR: Memory mapped I/O (write) (CGB only) not implemented. Addr: 0x{:X}",
+                "MMU ERROR: memory mapped I/O (write) (CGB only) not implemented. Addr: 0x{:X}",
                 addr
             ),*/
             0xFF80..=0xFFFE =>self.hram[(address & 0x7F) as usize] = byte,                                     // High RAM
@@ -91,9 +88,6 @@ impl MemoryBus {
         self.clock.interrupt=0;
     }
 
-    pub fn reset_interrupt(&mut self, flag: u8) {
-        self.interrupt_flags &= 0;
-    }
     fn dma_into_oam(&mut self, dma_start: u8) {
         // DMA start can be addressed as 0x0000, 0x0100, 0x0200, etc
         let actual_dma_start = u16::from(dma_start) << 8; // turns 0x01 to 0x0100

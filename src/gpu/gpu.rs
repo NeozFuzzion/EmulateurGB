@@ -63,7 +63,7 @@ impl GPU {
             0xFF49 => self.obp1_value,
             0xFF4A => self.wy,
             0xFF4B => self.wx,
-            _ => panic!("Unknown GPU control read operation: 0x{:X}", address),
+            _ => panic!("Unknown gpu control read operation: 0x{:X}", address),
         }
     }
 
@@ -91,7 +91,7 @@ impl GPU {
             }
             0xFF4A => self.wy=value,
             0xFF4B => self.wx=value,
-            _ => panic!("Unknown GPU control read operation: 0x{:X}", address),
+            _ => panic!("Unknown gpu control read operation: 0x{:X}", address),
         }
     }
 
@@ -109,15 +109,6 @@ impl GPU {
     pub fn write_oam(&mut self, address: u16, value: u8) {
         self.oam[(address & 0xFF) as usize] = value;
     }
-
-    fn addresses_data_tiles(&self) -> u16 {
-        if self.lcdc & 0b00010000 > 0 {
-            0x8000
-        } else {
-            0x8800
-        }
-    }
-
 
 
     fn addresses_tile_map(&self, is_bg:bool) -> u16 {
@@ -144,7 +135,7 @@ impl GPU {
 
             if self.ly == 144 {
                 self.interrupt |= 0x01;
-                x.send((self.screen_buffer)).unwrap();
+                x.send(self.screen_buffer).unwrap();
             }
 
             self.step_bgwin();

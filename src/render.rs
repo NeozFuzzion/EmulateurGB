@@ -1,17 +1,9 @@
 
 use glium::{self, glutin, texture, Surface};
 use glutin::dpi::LogicalSize;
-#[cfg(feature = "frame-capture")]
-use image;
 use std::borrow::Cow;
-#[cfg(feature = "frame-capture")]
-use std::fs::File;
-#[cfg(feature = "frame-capture")]
-use std::path::Path;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
-use std::thread;
-use std::time::{Duration, Instant};
 use crate::input::{Key, KeyType};
 
 
@@ -100,11 +92,11 @@ impl Renderer {
             dataa[i * 3 + 2] = ((data[i] >> 16) & 0xFF) as u8;
         }
 
-        let raw_image_2d = glium::texture::RawImage2d {
+        let raw_image_2d = texture::RawImage2d {
             data: Cow::Borrowed(&dataa),
             width: Self::WIDTH,
             height: Self::HEIGHT,
-            format: glium::texture::ClientFormat::U8U8U8,
+            format: texture::ClientFormat::U8U8U8,
         };
 
         self.texture.write(

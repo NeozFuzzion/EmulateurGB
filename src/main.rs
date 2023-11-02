@@ -1,6 +1,5 @@
 
-use std::{fs::File, thread};
-use std::io::{Read};
+use std::thread;
 use std::sync::mpsc;
 
 use cpu::registres::Registers;
@@ -10,6 +9,8 @@ mod memory;
 mod gpu;
 mod render;
 mod input;
+mod cartridge;
+
 
 extern crate glium;
 extern crate glutin;
@@ -19,17 +20,14 @@ use crate::cpu::clock::Clock;
 fn main() {
     let reg=Registers ::new();
 
-    let mut input_file = File::open("D:/Prog/snake.gb").expect("gameboy rom file");
-    let mut bytes = [0;0xFFFF];
-    input_file.read(&mut bytes).expect("read bytes from file");
 
     let (tx     , rx) = mpsc::channel();
     let (key_sender, key_receiver) = mpsc::channel();
 
-    let mut cpu = cpu::cpu::CPU{
+    let mut cpu = cpu::cpu::Cpu {
         registers: reg,
         pc: 0x0100,
-        bus: memory::memory::MemoryBus{ memory: bytes, interrupt_flags: 0, interrupt_enabled: 0, wram: [0_u8; 0x2000],  hram: [0_u8; 0x80], gpu: gpu::gpu::GPU::new(),screen_sender: tx, input: input::Input::new(key_receiver), clock: Clock::default() },
+        bus: memory::memory::MemoryBus{ rom: cartridge::new("D:/Prog/Zelda.gb"), interrupt_flags: 0, interrupt_enabled: 0, wram: [0_u8; 0x2000],  hram: [0_u8; 0x80], gpu: gpu::gpu::GPU::new(),screen_sender: tx, input: input::Input::new(key_receiver), clock: Clock::default() },
         sp: 0xFFFE,
         halt: false,
         interrupt_master_enable: true,
@@ -44,7 +42,7 @@ fn main() {
         rx,
         key_sender,
     );
-
+    //cpu.bus.init();
     let cpu_thread = thread::spawn(move || {
         let mut now = SystemTime::now();
         loop {

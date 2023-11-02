@@ -2,7 +2,7 @@ use crate::{cpu::registres::Registers, memory::memory::MemoryBus};
 
 use super::instructions::{ArithmeticTarget, RstTarget, Instruction, JumpTest, StackTarget, LoadByteSource, LoadType, LoadByteTarget, LoadWordSource, LoadWordTarget, JumpCondition};
 
-pub struct CPU {
+pub struct Cpu {
     pub(crate) registers: Registers,
     pub(crate) pc: u16,
     pub(crate) bus: MemoryBus,
@@ -14,19 +14,15 @@ pub struct CPU {
     pub(crate) cycle:u8,
 }
 
-impl CPU {
+impl Cpu {
     // pub const CPU_FREQ: u32 =4_194_304;
 
     pub fn read_next_byte(&mut self) -> u8 {
-        //self.pc += 1;
-        let byte = self.bus.read_byte(self.pc+1);
-        byte
+        self.bus.read_byte(self.pc+1)
     }
 
     pub fn read_next_word(&mut self) -> u16 {
-        //self.pc += 2;
-        let word = self.bus.read_word(self.pc+1);
-        word
+        self.bus.read_word(self.pc+1)
     }
 
     pub fn execute(&mut self, instruction: Instruction) -> u16{
@@ -1445,12 +1441,10 @@ impl CPU {
         let interrupt = self.stat_interruption();
         if interrupt > 0 {
             self.cycle=4;
+        } else if self.halt {
+            self.cycle=1; // noop
         } else {
-            if self.halt {
-                self.cycle=1; // noop
-            } else {
-                self.step();
-            }
+            self.step();
         }
         self.bus.run(self.cycle);
         self.cycle

@@ -166,8 +166,9 @@ impl GPU {
         for x in 0..160 {
             let (tile_number, x_pixel_in_tile, y_pixel_in_tile): (u8, u8, u16) =  {
                 //As previously take same type as value because of 8*8 tile on a 256*256 map
-                let (bgx,is_bg) ={
-                        //BG case
+                let (bgx,is_bg) = if self.lcdc & 0x20 > 0 && self.wy <= self.ly && u32::from(self.wx) <= x + 7{
+                        (x + 7 - u32::from(self.wx),false)
+                    } else {//BG case
                         (u32::from(self.scx) + x,true)
                     };
                 let bgx_tile_num  = ((bgx & 0xFF) >> 3) as u16;

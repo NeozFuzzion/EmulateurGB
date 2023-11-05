@@ -67,40 +67,6 @@ impl MemoryBus {
         }
     }
 
-    pub fn init(&mut self){
-        self.write_byte(0xFF05, 0);
-        self.write_byte(0xFF06, 0);
-        self.write_byte(0xFF07, 0);
-        self.write_byte(0xFF10, 0x80);
-        self.write_byte(0xFF11, 0xBF);
-        self.write_byte(0xFF12, 0xF3);
-        self.write_byte(0xFF14, 0xBF);
-        self.write_byte(0xFF16, 0x3F);
-        self.write_byte(0xFF16, 0x3F);
-        self.write_byte(0xFF17, 0);
-        self.write_byte(0xFF19, 0xBF);
-        self.write_byte(0xFF1A, 0x7F);
-        self.write_byte(0xFF1B, 0xFF);
-        self.write_byte(0xFF1C, 0x9F);
-        self.write_byte(0xFF1E, 0xFF);
-        self.write_byte(0xFF20, 0xFF);
-        self.write_byte(0xFF21, 0);
-        self.write_byte(0xFF22, 0);
-        self.write_byte(0xFF23, 0xBF);
-        self.write_byte(0xFF24, 0x77);
-        self.write_byte(0xFF25, 0xF3);
-        self.write_byte(0xFF26, 0xF1);
-        self.write_byte(0xFF40, 0x91);
-        self.write_byte(0xFF42, 0);
-        self.write_byte(0xFF43, 0);
-        self.write_byte(0xFF45, 0);
-        self.write_byte(0xFF47, 0xFC);
-        self.write_byte(0xFF48, 0xFF);
-        self.write_byte(0xFF49, 0xFF);
-        self.write_byte(0xFF4A, 0);
-        self.write_byte(0xFF4B, 0);
-    }
-
     pub fn read_word(&self, address: u16) -> u16 {
         u16::from(self.read_byte(address)) | (u16::from(self.read_byte(address + 1)) << 8)
     }
@@ -125,8 +91,8 @@ impl MemoryBus {
     }
 
     fn dma_into_oam(&mut self, dma_start: u8) {
-        // DMA start can be addressed as 0x0000, 0x0100, 0x0200, etc
-        let actual_dma_start = u16::from(dma_start) << 8; // turns 0x01 to 0x0100
+        // DMA start 0x0000, 0x0100, 0x0200, etc
+        let actual_dma_start = u16::from(dma_start) * 0x100;
         for i in 0..(0xA0_u16) {
             let value = self.read_byte(actual_dma_start + i);
             self.gpu.write_oam(i, value);

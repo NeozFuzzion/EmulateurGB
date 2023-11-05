@@ -33,17 +33,21 @@ impl Clock {
         }
     }
 
-    pub fn run(&mut self,ticks:u32  ){
+    pub fn run(&mut self, ticks:u32){
         self.counter_div += ticks;
-        while self.counter_div >= 0xFF {
+        if self.counter_div >= 0xFF {
             self.div = self.div.wrapping_add(1);
             self.counter_div -= 256;
         }
 
         if self.tac  & 0x4 != 0 {
             self.counter += ticks;
-            let limit = match self.tac & 0x3 { 0 => 1024 , 1 => 16, 2 => 64, 3 => 256,
-                _ => panic!("error of limit timer")
+            let limit = match self.tac & 0x3 {
+                0 => 1024,
+                1 => 16,
+                2 => 64,
+                3 => 256,
+                _ => panic!("Error of limit timer")
             };
             while self.counter >= limit {
                 self.tima = self.tima.wrapping_add(1);

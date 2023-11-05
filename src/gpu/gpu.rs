@@ -20,7 +20,7 @@ pub struct GPU {
     obp1: [u32; 4],
     pub(crate) screen_buffer: [u32; 160*144],
     pub(crate) interrupt: u8,
-    render_clock: u32,
+    pub(crate) render_counter: u8,
 }
 
 
@@ -38,15 +38,15 @@ impl GPU {
             lyc: 0,
             wy: 0,
             wx: 0,
-            bgp_value: 0,
-            bgp: [0;4],
-            obp0_value: 0,
-            obp0: [0;4],
-            obp1_value: 0,
-            obp1: [0;4],
+            bgp_value: 0xFC,
+            bgp: value_to_palette(0xFC),
+            obp0_value: 0xFF,
+            obp0: value_to_palette(0xFF),
+            obp1_value: 0xFF,
+            obp1: value_to_palette(0xFF),
             screen_buffer: [0_u32; 160*144],
             interrupt: 0,
-            render_clock: 0,
+            render_counter: 0,
         }
     }
     pub fn read_lcd_reg(&self, address:u16) -> u8{
@@ -68,7 +68,6 @@ impl GPU {
     }
 
     pub fn write_lcd_reg(&mut self, address:u16, value: u8){
-        //println!("add : {:x}, val : {:b}",address,value);
         match address {
             0xFF40 => self.lcdc=value,
             0xFF41 => self.stat=value,
@@ -124,9 +123,8 @@ impl GPU {
         if self.lcdc & 0x80 == 0 {
             return;
         }
-        let cycles_u32 = u32::from(cycle);
-        if self.render_clock + cycles_u32 >= 114 {
-            self.render_clock = (self.render_clock + cycles_u32) % 114;
+        if self.render_counter + cycle >= 114 {
+            self.render_counter = (self.render_counter + cycle) % 114;
             self.ly = (self.ly + 1) % 154;
 
             if self.stat & 0x40 > 0 && self.ly == self.lyc {
@@ -141,7 +139,7 @@ impl GPU {
             self.step_bgwin();
             self.step_sprite();
         } else {
-            self.render_clock += cycles_u32;
+            self.render_counter += cycle;
         }
     }
 
@@ -158,38 +156,40 @@ impl GPU {
         let winy = self.ly.wrapping_sub(self.wy);
         //Keep all bit above the 3rd move by 3 to get a value 0-31
         let bgy_tile_num = (u16::from(bgy) & 0xFF) >> 3;
-        let bgy_pixel_in_tile = u16::from(bgy) & 0x07;
+        let bgy_in_tile = u16::from(bgy) & 0x07;
 
-        let winy_tile = (u16::from(winy) & 0xFF) >> 3;
-        let winy_pixel_in_tile = u16::from(winy) & 0x07;
+        let wy_tile_num = (u16::from(winy) & 0xFF) >> 3;
+        let wy_in_tile = u16::from(winy) & 0x07;
 
         for x in 0..160 {
-            let (tile_number, x_pixel_in_tile, y_pixel_in_tile): (u8, u8, u16) =  {
+            let (tile_num, x_in_tile, y_in_tile): (u8, u8, u16) =  {
                 //As previously take same type as value because of 8*8 tile on a 256*256 map
-                let (bgx,is_bg) = if self.lcdc & 0x20 > 0 && self.wy <= self.ly && u32::from(self.wx) <= x + 7{
+                let (posx,is_bg) = if self.lcdc & 0x20 > 0 && self.wy <= self.ly && u32::from(self.wx) <= x + 7{
                         (x + 7 - u32::from(self.wx),false)
-                    } else {//BG case
+                    } else {
+                        //BG case
                         (u32::from(self.scx) + x,true)
                     };
-                let bgx_tile_num  = ((bgx & 0xFF) >> 3) as u16;
+                let posx_tile_num = ((posx & 0xFF) >> 3) as u16;
                 //Stock in reverse
-                let bgx_pixel_in_tile = 7 - (bgx & 0x07) as u8;
+                let posx_pixel_in_tile = 7 - (posx & 0x07) as u8;
 
                 //Vram like a line so y*32 + x to get the right number
-                let tile_number: u8 = self.read_vram(self.addresses_tile_map(is_bg) + bgy_tile_num * 32 * (is_bg as u16) + winy_tile * 32 * (!is_bg as u16) + bgx_tile_num);
+                let tile_number: u8 = self.read_vram(self.addresses_tile_map(is_bg) + bgy_tile_num * 32 * (is_bg as u16) + wy_tile_num * 32 * (!is_bg as u16) + posx_tile_num);
 
-                (tile_number, bgx_pixel_in_tile, bgy_pixel_in_tile*(is_bg as u16) + winy_pixel_in_tile*(!is_bg as u16))
+                (tile_number, posx_pixel_in_tile, bgy_in_tile *(is_bg as u16) + wy_in_tile *(!is_bg as u16))
             };
 
+            //get address of the tile
             let tile_addr = if self.lcdc & 0b00010000 > 0 {
-                u16::from(tile_number) * 16 + 0x8000
+                u16::from(tile_num) * 16 + 0x8000
             } else {
-                // offset
-                let adjusted_tile_number = (i16::from(tile_number as i8) + 128) as u16;
+                // offset -128..127 and start $8800
+                let adjusted_tile_number = (i16::from(tile_num as i8) + 128) as u16;
                 adjusted_tile_number * 16 + 0x8800
             };
 
-            let tile_line_addr = tile_addr + y_pixel_in_tile * 2;
+            let tile_line_addr = tile_addr + y_in_tile * 2;
 
             //Retrieve the 2 line to merge to get the pixel id color
             let (tile_line_data_1, tile_line_data_2) = (
@@ -197,7 +197,7 @@ impl GPU {
                 self.read_vram(tile_line_addr + 1),
             );
 
-            let pixel_in_line_mask = 1 << x_pixel_in_tile;
+            let pixel_in_line_mask = 1 << x_in_tile;
             let pixel_data_1: u8 = if tile_line_data_1 & pixel_in_line_mask > 0 {
                 0b01
             } else {

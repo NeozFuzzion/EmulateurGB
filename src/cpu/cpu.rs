@@ -1,3 +1,4 @@
+use std::sync::mpsc::Receiver;
 use crate::{cpu::registres::Registers, memory::memory::MemoryBus};
 
 use super::instructions::{ArithmeticTarget, RstTarget, Instruction, JumpTest, StackTarget, LoadByteSource, LoadType, LoadByteTarget, LoadWordSource, LoadWordTarget, JumpCondition};
@@ -12,6 +13,7 @@ pub struct Cpu {
     pub(crate) ei: u8,
     pub(crate) di: u8,
     pub(crate) cycle:u8,
+    pub(crate) stop:Receiver<bool>,
 }
 
 impl Cpu {
@@ -300,6 +302,7 @@ impl Cpu {
                             LoadByteTarget::E => self.registers.e = source_value,
                             LoadByteTarget::H => self.registers.h = source_value,
                             LoadByteTarget::L => self.registers.l = source_value,
+                            LoadByteTarget::AddressBC => self.bus.write_byte(self.registers.get_bc(), source_value),
                             LoadByteTarget::AddressHL => self.bus.write_byte(self.registers.get_hl(), source_value),
                             LoadByteTarget::AddressDE => self.bus.write_byte(self.registers.get_de(), source_value),
                             LoadByteTarget::AddressHLP =>self.bus.write_byte(self.registers.get_hlp(), source_value),
@@ -356,9 +359,6 @@ impl Cpu {
                                 self.bus.write_word(address, source_value) },
                         };
                         match (source, target) {
-                            (LoadWordSource::HL,LoadWordTarget::SP) => {
-                                self.pc
-                            },
                             (LoadWordSource::SPR8,LoadWordTarget::HL) => {
                                 self.pc+2
                             }
@@ -492,6 +492,7 @@ impl Cpu {
             Instruction::ADDSP() => self.execute_addsp(),
             Instruction::PrefixCB => panic!("value 6connu"),
         }
+
     }
 
     pub fn daa(&mut self) {
@@ -547,7 +548,7 @@ impl Cpu {
         // Half Carry is set if adding the lower 12 bits of the value and register HL
         // together result in a value bigger than 0xFFF. If the result is larger than 0xFFF,
         // then the addition caused a carry from the lower 12 bits to the upper 4 bits.
-        self.registers.f.half_carry = (self.registers.get_hl() & 0xFFF) + (value & 0xFFF) > 0xFFF;
+        self.registers.f.half_carry = (self.registers.get_hl() & 0x07FF) + (value & 0x07FF) > 0x07FF;
         self.registers.set_hl(new_value);
         self.pc+1
     }
@@ -948,12 +949,12 @@ impl Cpu {
     }
 
     pub fn execute_rrca(&mut self) {
-        let bit0 = self.registers.a & 0x01;
+        let bit0 = self.registers.a & 0x01 != 0;
 
-        self.registers.a >>= 1;
+        self.registers.a = (self.registers.a >> 1) | (if bit0 { 0x80 } else { 0 });
 
         // Le bit retenu est maintenant le bit0.
-        self.registers.f.carry = bit0 != 0;
+        self.registers.f.carry = bit0 ;
 
         self.registers.f.zero = false;
         self.registers.f.subtract = false;
@@ -963,7 +964,7 @@ impl Cpu {
     pub fn execute_rlca(&mut self) {
         let bit7 = self.registers.a  & 0x80 > 0;
 
-        self.registers.a <<= 1;
+        self.registers.a = (self.registers.a << 1) | (if bit7 { 1 } else { 0 });
 
         // Le bit retenu est maintenant le bit7.
         self.registers.f.carry = bit7;
@@ -1174,7 +1175,6 @@ impl Cpu {
         if self.registers.f.carry {
             value |= 0x01; // Set the rightmost bit to the previous carry value.
         }
-
         // Update the register or memory with the new value.
         match target {
             ArithmeticTarget::A => self.registers.a = value,
@@ -1240,7 +1240,7 @@ impl Cpu {
         }
 
         // Update the flags.
-        self.registers.f.zero = false;
+        self.registers.f.zero = value==0;
         self.registers.f.subtract = false;
         self.registers.f.half_carry = false;
         self.registers.f.carry = carry;

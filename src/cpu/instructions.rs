@@ -17,7 +17,7 @@ pub enum LoadType {
 }
 
 pub enum LoadByteTarget{
-    A, B, C, D, E, H, L, AddressHL, AddressDE, AddressHLP, AddressHLM, AddressC, Address16, Address8
+    A, B, C, D, E, H, L, AddressHL, AddressBC, AddressDE, AddressHLP, AddressHLM, AddressC, Address16, Address8
 }
 
 pub enum LoadByteSource{
@@ -299,7 +299,7 @@ impl Instruction {
             0xA3 => (Some(Instruction::RESET(ArithmeticTarget::E, 4)),2),
             0xA4 => (Some(Instruction::RESET(ArithmeticTarget::H, 4)),2),
             0xA5 => (Some(Instruction::RESET(ArithmeticTarget::L, 4)),2),
-            0xA6 => (Some(Instruction::RESET(ArithmeticTarget::AddressHL, 4)),2),
+            0xA6 => (Some(Instruction::RESET(ArithmeticTarget::AddressHL, 4)),4),
             0xA7 => (Some(Instruction::RESET(ArithmeticTarget::A, 4)),2),
 
             // RESET instruction (bit 5)
@@ -411,6 +411,7 @@ impl Instruction {
             0xFD => (Some(Instruction::SET(ArithmeticTarget::L, 7)),2),
             0xFE => (Some(Instruction::SET(ArithmeticTarget::AddressHL, 7)),4),
             0xFF => (Some(Instruction::SET(ArithmeticTarget::A, 7)),2),
+            _ => panic!("unknown not prefixed instruction")
         }
     }
 
@@ -418,7 +419,7 @@ impl Instruction {
         match byte {
             0x00 => (Some(Instruction::NOP),1),
             0x01 => (Some(Instruction::LD(LoadType::Word(LoadWordTarget::BC, LoadWordSource::D16))),3),
-            0x02 => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::AddressHL, LoadByteSource::A))),2),
+            0x02 => (Some(Instruction::LD(LoadType::Byte(LoadByteTarget::AddressBC, LoadByteSource::A))),2),
             0x03 => (Some(Instruction::INC(ArithmeticTarget::BC)),2),
             0x04 => (Some(Instruction::INC(ArithmeticTarget::B)),1),
             0x05 => (Some(Instruction::DEC(ArithmeticTarget::B)),1),
@@ -676,7 +677,7 @@ impl Instruction {
             0xFB => (Some(Instruction::EI),1),
             0xFE => (Some(Instruction::CP(ArithmeticTarget::D8)),2),
             0xFF => (Some(Instruction::RST(RstTarget::Rst38H)),4),
-            _ => {panic!("unknown prefixed instruction")}
+            _ => panic!("unknown prefixed instruction")
         }
     }
 }

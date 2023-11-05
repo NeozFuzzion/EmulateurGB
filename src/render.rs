@@ -13,24 +13,20 @@ pub struct Renderer {
     events_loop: glutin::EventsLoop,
     screen_data_receiver: Receiver<[u32;23040]>,
     key_sender: Sender<Key>,
+    stop_sender: Sender<bool>,
 }
 
 impl Renderer {
     pub const WIDTH: u32 = 160;
     pub const HEIGHT: u32 = 144;
 
-    pub fn new(
-        title: &str,
-        scale: u32,
-        screen_data_receiver: Receiver<[u32;23040]>,
-        key_sender: Sender<Key>,
-    ) -> Self {
+    pub fn new(title: &str, data_receiver: Receiver<[u32;23040]>, key_sender: Sender<Key>, stop_sender: Sender<bool>) -> Self {
         let events_loop = glutin::EventsLoop::new();
         let window = glutin::WindowBuilder::new()
             .with_title(title)
             .with_dimensions(LogicalSize::new(
-                f64::from(Self::WIDTH * scale),
-                f64::from(Self::HEIGHT * scale),
+                f64::from(Self::WIDTH * 3),
+                f64::from(Self::HEIGHT * 3),
             ));
 
         let context = glutin::ContextBuilder::new();
@@ -54,18 +50,14 @@ impl Renderer {
             display,
             texture,
             events_loop,
-            screen_data_receiver,
+            screen_data_receiver: data_receiver,
             key_sender,
+            stop_sender,
         }
     }
 
     pub fn start_loop(&mut self) {
         self.render_loop();
-        loop {
-            if let Err(mpsc::TryRecvError::Disconnected) = self.screen_data_receiver.try_recv() {
-                break;
-            }
-        }
     }
 
     fn render_loop(&mut self) {
@@ -80,6 +72,7 @@ impl Renderer {
             }
 
         }
+        self.stop_sender.send(true).expect("Error sending stop msg");
     }
 
 
@@ -173,16 +166,10 @@ fn handle_keyboard_input(
         Some(glutin::VirtualKeyCode::Down) => send_key_event(key_sender, KeyType::Down, is_down),
         Some(glutin::VirtualKeyCode::Left) => send_key_event(key_sender, KeyType::Left, is_down),
         Some(glutin::VirtualKeyCode::Right) => send_key_event(key_sender, KeyType::Right, is_down),
-        Some(glutin::VirtualKeyCode::Z) => send_key_event(key_sender, KeyType::A, is_down),
-        Some(glutin::VirtualKeyCode::X) => send_key_event(key_sender, KeyType::B, is_down),
-        Some(glutin::VirtualKeyCode::C) => send_key_event(key_sender, KeyType::Select, is_down),
-        Some(glutin::VirtualKeyCode::V) => send_key_event(key_sender, KeyType::Start, is_down),
-        Some(glutin::VirtualKeyCode::Space) => {
-            // Handle Space key if needed
-        }
-        Some(glutin::VirtualKeyCode::Q) => {
-            // Handle Q key if needed
-        }
+        Some(glutin::VirtualKeyCode::Q) => send_key_event(key_sender, KeyType::A, is_down),
+        Some(glutin::VirtualKeyCode::S) => send_key_event(key_sender, KeyType::B, is_down),
+        Some(glutin::VirtualKeyCode::W) => send_key_event(key_sender, KeyType::Select, is_down),
+        Some(glutin::VirtualKeyCode::X) => send_key_event(key_sender, KeyType::Start, is_down),
         _ => (),
     }
 }

@@ -95,7 +95,7 @@ impl MemoryBankController for Mbc5 {
         let address_correct= if address < 0x4000 {
             address as usize
         } else {
-            self.rombank as usize * 0x4000 | ((address as usize) & 0x3FFF)
+            (self.rombank as usize * 0x4000) | ((address as usize) & 0x3FFF)
         };
         match address{
             0x0000..=0x3FFF => {
@@ -106,7 +106,7 @@ impl MemoryBankController for Mbc5 {
             }
             0xA000..=0xBFFF => {
                 if self.has_ram{
-                    self.ram[(self.rambank * 0x2000 | (address & 0x1FFF)) as usize]
+                    self.ram[((self.rambank * 0x2000) | (address & 0x1FFF)) as usize]
                 } else {
                     0
                 }
@@ -125,7 +125,7 @@ impl MemoryBankController for Mbc5 {
             0x4000 ..= 0x5FFF => self.rambank = (byte as u16 & 0x0F) % self.number_rambank,
             0x6000 ..= 0x7FFF => { /* Do nothing but why don't know */ },
             0xA000..=0xBFFF => {
-                if self.ram_enable == false {
+                if !self.ram_enable {
                     return
                 }
                 /*if self.has_ram && self.has_battery{
@@ -133,7 +133,7 @@ impl MemoryBankController for Mbc5 {
                     File::create(path).and_then(|mut f| f.write_all(&*self.ram)).expect("error saving");
                 }*/
 
-                self.ram[(self.rambank * 0x2000 | (address & 0x1FFF))as usize] = byte;
+                self.ram[((self.rambank * 0x2000) | (address & 0x1FFF))as usize] = byte;
             }
             _ => panic!("GG i didn't thought someone can go there if you want to know you are lost in MBC5 write_byte")
         }
@@ -147,7 +147,7 @@ impl Drop for Mbc5 {
     fn drop(&mut self) {
         if self.has_ram && self.has_battery{
             let path= self.path.with_extension("gbsave");
-            File::create(path).and_then(|mut f| f.write_all(&*self.ram)).expect("error saving");
+            File::create(path).and_then(|mut f| f.write_all(&self.ram)).expect("error saving");
 
         }
 
@@ -157,8 +157,8 @@ impl Drop for Mbc5 {
 fn loadsave(path: path::PathBuf) -> Option<Vec<u8>> {
     let mut data = vec![];
 
-    if let Ok(mut file) = File::open(&path) {
-        if let Ok(_) = file.read_to_end(&mut data) {
+    if let Ok(mut file) = File::open(path) {
+        if file.read_to_end(&mut data).is_ok() {
             return Some(data);
         }
     }

@@ -1,6 +1,6 @@
 use std::sync::mpsc::Sender;
 
-pub struct GPU {
+pub struct Gpu {
     pub(crate) vram: [u8; 0x2000],
     pub(crate) oam: [u8; 0xA0],
     //https://gbdev.io/pandocs/STAT.html  &&   https://gbdev.io/pandocs/LCDC.html
@@ -25,7 +25,7 @@ pub struct GPU {
 
 
 
-impl GPU {
+impl Gpu {
     pub fn new() -> Self {
         Self {
             vram: [0_u8; 0x2000],
@@ -146,7 +146,7 @@ impl GPU {
 
     pub fn step_bgwin(&mut self){
         //bg on ? or Vblank
-        if !(self.lcdc & 0x01 > 0) || self.ly >= 144 {
+        if self.lcdc & 0x01 ==0 || self.ly >= 144 {
             return;
         }
 
@@ -306,12 +306,12 @@ fn value_to_palette(value: u8) -> [u32; 4] {
     let colors = [0xffffff, 0xaaaaaa, 0x555555 ,0x000000];
     let mut result = [0; 4];
 
-    for i in 0..4 {
+    for (i, item) in result.iter_mut().enumerate() {
         // Get the color index by masking the value with 0b11 (binary 11)
         let color_index = (value >> (2 * i)) & 0b11;
 
         // Assign the corresponding color value to the result array
-        result[i] = colors[color_index as usize];
+        *item = colors[color_index as usize];
     }
 
     result

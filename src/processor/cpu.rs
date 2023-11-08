@@ -1,5 +1,5 @@
 use std::sync::mpsc::Receiver;
-use crate::{cpu::registres::Registers, memory::memory::MemoryBus};
+use crate::{processor::registres::Registers, mmu::memory::MemoryBus};
 
 use super::instructions::{ArithmeticTarget, RstTarget, Instruction, JumpTest, StackTarget, LoadByteSource, LoadType, LoadByteTarget, LoadWordSource, LoadWordTarget, JumpCondition};
 
@@ -29,7 +29,7 @@ impl Cpu {
 
     pub fn execute(&mut self, instruction: Instruction) -> u16{
         match instruction {
-            Instruction::ADD(target) => {
+            Instruction::Add(target) => {
                 match target {
                     ArithmeticTarget::A => {
                         let value = self.registers.a;
@@ -85,36 +85,36 @@ impl Cpu {
                 }
             },
 
-            Instruction::ADDHL(target) => self.execute_add_hl(target),
+            Instruction::Addhl(target) => self.execute_add_hl(target),
 
-            Instruction::ADC(target) => self.execute_adc(target),
+            Instruction::Adc(target) => self.execute_adc(target),
 
-            Instruction::SUB(target) => {
+            Instruction::Sub(target) => {
                 self.execute_sub(target)
             },
 
-            Instruction::SBC(target) => {
+            Instruction::Sbc(target) => {
                 self.execute_sbc(target)
                 
             },
 
-            Instruction::AND(target) => {
+            Instruction::And(target) => {
                 self.execute_and(target)
             },
 
-            Instruction::OR(target) => {
+            Instruction::Or(target) => {
                 self.execute_or(target)
             },
 
-            Instruction::XOR(target) => {
+            Instruction::Xor(target) => {
                 self.execute_xor(target)
             },
 
-            Instruction::CP(target) => {
+            Instruction::Cp(target) => {
                 self.execute_cp(target)
             },
 
-            Instruction::INC(target) => {
+            Instruction::Inc(target) => {
                 match target {
                     ArithmeticTarget::A | ArithmeticTarget::B | ArithmeticTarget::C | ArithmeticTarget::D
                     | ArithmeticTarget::E | ArithmeticTarget::H | ArithmeticTarget::L | ArithmeticTarget::AddressHL => {
@@ -146,7 +146,7 @@ impl Cpu {
                 self.pc+1
             },
 
-            Instruction::DEC(target) => {
+            Instruction::Dec(target) => {
                 match target {
                     ArithmeticTarget::A | ArithmeticTarget::B | ArithmeticTarget::C | ArithmeticTarget::D
                     | ArithmeticTarget::E | ArithmeticTarget::H | ArithmeticTarget::L | ArithmeticTarget::AddressHL => {
@@ -178,97 +178,97 @@ impl Cpu {
                 self.pc+1
             },
 
-            Instruction::CCF => {
+            Instruction::Ccf => {
                 self.execute_ccf();
                 self.pc+1
             },
 
-            Instruction::SCF => {
+            Instruction::Scf => {
                 self.execute_scf();
                 self.pc+1
             },
 
-            Instruction::CPL => {
+            Instruction::Cpl => {
                 self.execute_cpl();
                 self.pc+1
             },
 
-            Instruction::RRA => {
+            Instruction::Rra => {
                 self.execute_rra();
                 self.pc+1
             },
 
-            Instruction::RLA => {
+            Instruction::Rla => {
                 self.execute_rla();
                 self.pc+1
             },
 
-            Instruction::RRCA => {
+            Instruction::Rrca => {
                 self.execute_rrca();
                 self.pc+1
             },
 
-            Instruction::RLCA => {
+            Instruction::Rlca => {
                 self.execute_rlca();
                 self.pc+1
             },
 
-            Instruction::BIT(target, bit_num) => {
+            Instruction::Bit(target, bit_num) => {
                 self.execute_bit(target, bit_num);
                 self.pc+2
             },
 
-            Instruction::RESET(target, bit_num) => {
+            Instruction::Reset(target, bit_num) => {
                 self.execute_reset(target, bit_num);
                 self.pc+2
             },
 
-            Instruction::SET(target, bit_num) => {
+            Instruction::Set(target, bit_num) => {
                 self.execute_set(target, bit_num);
                 self.pc+2
             },
 
-            Instruction::SRL(target) => {
+            Instruction::Srl(target) => {
                 self.execute_srl(target);
                 self.pc+2
             },
 
-            Instruction::RR(target) => {
+            Instruction::Rr(target) => {
                 self.execute_rr(target);
                 self.pc+2
             },
 
-            Instruction::RL(target) => {
+            Instruction::Rl(target) => {
                 self.execute_rl(target);
                 self.pc+2
             },
 
-            Instruction::RRC(target) => {
+            Instruction::Rrc(target) => {
                 self.execute_rrc(target);
                 self.pc+2
             },
 
-            Instruction::RLC(target) => {
+            Instruction::Rlc(target) => {
                 self.execute_rlc(target);
                 self.pc+2
             },
 
-            Instruction::SRA(target) => {
+            Instruction::Sra(target) => {
                 self.execute_sra(target);
                 self.pc+2
             },
 
-            Instruction::SLA(target) => {
+            Instruction::Sla(target) => {
                 self.execute_sla(target);
                 self.pc+2
             },
 
-            Instruction::SWAP(target) => {
+            Instruction::Swap(target) => {
                 self.execute_swap(target);
                 self.pc+2
             },
 
-            Instruction::LD(load_type) => {
+            Instruction::Ld(load_type) => {
                 match load_type {
                     LoadType::Byte(target, source) => {
 
@@ -370,7 +370,7 @@ impl Cpu {
                 }
             }
 
-            Instruction::LDH(load_type) => {
+            Instruction::Ldh(load_type) => {
 
                 match load_type {
                     LoadType::Byte(target, source) => {
@@ -399,7 +399,7 @@ impl Cpu {
                 }
             }
 
-            Instruction::PUSH(target) => {
+            Instruction::Push(target) => {
                 let value = match target {
                     StackTarget::BC => self.registers.get_bc(),
                     StackTarget::DE => self.registers.get_de(),
@@ -411,7 +411,7 @@ impl Cpu {
                 self.pc+1
             }
 
-            Instruction::POP(target) => {
+            Instruction::Pop(target) => {
                 let result = self.pop();
                 match target {
                     StackTarget::BC => self.registers.set_bc(result),
@@ -424,56 +424,56 @@ impl Cpu {
                 self.pc+1
             }
 
-            Instruction::CALL(test) => {
+            Instruction::Call(test) => {
                 let jump_condition = self.getjump_condition(test);
                 self.call(jump_condition)
             }
 
-            Instruction::RET(test) => {
+            Instruction::Ret(test) => {
                 let jump_condition = self.getjump_condition(test);
                 self.return_(jump_condition)
             }
 
-            Instruction::DAA => {self.daa();self.pc+1}
+            Instruction::Daa => {self.daa();self.pc+1}
 
-            Instruction::JP(test, ju) => {
+            Instruction::Jp(test, ju) => {
                 let jump_condition = self.getjump_condition(test);
                 self.jump(jump_condition,ju)
             }
 
-            Instruction::JR(test) => {
+            Instruction::Jr(test) => {
                 let jump_condition = self.getjump_condition(test);
                 self.jump_relative(jump_condition);
                 self.pc
             }
 
 
-            Instruction::RETI => {
+            Instruction::Reti => {
                 self.pc = self.pop();
                 self.ei = 1;
                 self.pc
             },
 
-            Instruction::STOP => self.pc + 2,
+            Instruction::Stop => self.pc + 2,
 
-            Instruction::HALT =>{self.halt = true;
+            Instruction::Halt =>{self.halt = true;
                 self.pc + 1},
 
-            Instruction::EI => {
+            Instruction::Ei => {
                 //Like DI enabling take 1 more instructions to update IME flag
                 self.ei=2;
                 self.pc + 1
             },
 
-            Instruction::DI => {
+            Instruction::Di => {
                 //Like EI disabling take 1 more instructions to update IME flag
                 self.di=2;
                 self.pc + 1
             },
 
-            Instruction::NOP => self.pc + 1,
+            Instruction::Nop => self.pc + 1,
 
-            Instruction::RST(npc) => {
+            Instruction::Rst(npc) => {
                 let old_pc = self.pc+1;
                 self.push(old_pc);
                 match npc {
@@ -489,7 +489,7 @@ impl Cpu {
                 self.pc
             },
 
-            Instruction::ADDSP() => self.execute_addsp(),
+            Instruction::Addsp() => self.execute_addsp(),
             Instruction::PrefixCB => panic!("value 6connu"),
         }
 
@@ -498,7 +498,7 @@ impl Cpu {
     pub fn daa(&mut self) {
         let mut result = self.registers.a as u16;
 
-        if self.registers.f.subtract == false {
+        if !self.registers.f.subtract  {
             if self.registers.f.carry || result > 0x99 {
                 result += 0x60;
                 self.registers.f.carry = true;

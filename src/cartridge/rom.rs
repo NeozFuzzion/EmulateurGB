@@ -21,3 +21,8 @@ impl MemoryBankController for Rom {
         //no writing right in rom only
     }
 }
+impl Drop for Rom {
+    fn drop(&mut self) {
+
+    }
+}

@@ -1,8 +1,8 @@
 use core::panic;
 use std::sync::mpsc::Sender;
-use crate::cpu::clock::Clock;
+use crate::processor::clock::Clock;
 
-use crate::gpu::gpu::GPU;
+use crate::ppu::gpu::Gpu;
 use crate::input::Input;
 use crate::cartridge::MemoryBankController;
 
@@ -11,7 +11,7 @@ pub struct MemoryBus {
     pub(crate) rom: Box<dyn MemoryBankController>,
     pub(crate) wram: [u8; 0x2000], 
     pub(crate) hram: [u8; 0x80],
-    pub(crate) gpu: GPU,
+    pub(crate) gpu: Gpu,
     pub(crate) screen_sender:Sender<[u32;23040]>,
     pub(crate) interrupt_flags: u8,
     pub(crate) interrupt_enabled: u8,
@@ -93,7 +93,7 @@ impl MemoryBus {
     fn dma_into_oam(&mut self, dma_start: u8) {
         // DMA start 0x0000, 0x0100, 0x0200, etc
         let actual_dma_start = u16::from(dma_start) * 0x100;
-        for i in 0..(0xA0_u16) {
+        for i in 0..0xA0_u16 {
             let value = self.read_byte(actual_dma_start + i);
             self.gpu.write_oam(i, value);
         }

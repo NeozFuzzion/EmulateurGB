@@ -6,7 +6,12 @@ pub(crate) mod rom;
 pub(crate) mod mbc5;
 
 pub fn new(cart_path: &str) -> Box<dyn MemoryBankController> {
-    let mut input_file = File::open(cart_path).expect("gameboy rom file");
+    let mut input_file = match File::open(cart_path) {
+        Ok(file) => file,
+        Err(err) => {
+            panic!("Error opening the file: {}", err);
+        }
+    };
     let mut bytes : Vec<u8> = vec![];
     input_file.read_to_end(&mut bytes).expect("read bytes from file");
     //check nintendo logo
@@ -18,7 +23,7 @@ pub fn new(cart_path: &str) -> Box<dyn MemoryBankController> {
         //0x08..0x09 => Box::new(Rom::new())  //rom with ram and battery docs says not known
         //0x0B..0x0D => Box::new(Mmm01::new())
         //0x0F..0x13 => Box::new(Mbc3::new())
-        0x19..=0x1B => Box::new(Mbc5::new(bytes,cart_path)),  //pokemon most time
+        0x19..=0x1B => Box::new(Mbc5::new(bytes,cart_path)),  // 1B for pokemon red
         //0x1C..=0x1E => Box::new(Mbc5::new(bytes)),  //rumble
         //0x20 => Box::new(Mbc6::new())
         //0x22 => Box::new(Mbc7::new())

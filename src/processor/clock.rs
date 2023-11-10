@@ -33,6 +33,7 @@ impl Clock {
         }
     }
 
+    //Follow https://gbdev.io/pandocs/Timer_and_Divider_Registers.html
     pub fn run(&mut self, ticks:u32){
         self.counter_div += ticks;
         if self.counter_div >= 0xFF {

@@ -1,5 +1,6 @@
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, Sender};
 use crate::{processor::registres::Registers, mmu::memory::MemoryBus};
+use crate::input::Key;
 
 use super::instructions::{ArithmeticTarget, RstTarget, Instruction, JumpTest, StackTarget, LoadByteSource, LoadType, LoadByteTarget, LoadWordSource, LoadWordTarget, JumpCondition};
 
@@ -19,6 +20,21 @@ pub struct Cpu {
 impl Cpu {
     // pub const CPU_FREQ: u32 =4_194_304;
 
+    pub fn new(rom_path: &str, screen_sender: Sender<[u32; 23040]>, key_receiver: Receiver<Key>, stop_receiver: Receiver<bool>) -> Self {
+
+        Cpu {
+            registers: Registers ::new(),
+            pc: 0x0100,
+            bus: MemoryBus::new(rom_path, screen_sender, key_receiver),
+            sp: 0xFFFE,
+            halt: false,
+            interrupt_master_enable: true,
+            ei: 0,
+            di: 0,
+            cycle: 0,
+            stop: stop_receiver,
+        }
+    }
     pub fn read_next_byte(&mut self) -> u8 {
         self.bus.read_byte(self.pc+1)
     }
@@ -384,7 +400,7 @@ impl Cpu {
                             },
                             _ => { panic!("TODO: implement other sources") }
                         };
-                        //println!("{}",source_value);
+
                         match target {
                             LoadByteTarget::A => self.registers.a = source_value,
                             LoadByteTarget::Address8 => {
@@ -523,12 +539,10 @@ impl Cpu {
 
     pub fn add(&mut self, value: u8) -> u8 {
         let (new_value, did_overflow) = self.registers.a.overflowing_add(value);
+
         self.registers.f.zero = new_value == 0;
         self.registers.f.subtract = false;
         self.registers.f.carry = did_overflow;
-        // Half Carry is set if adding the lower nibbles of the value and register A
-        // together result in a value bigger than 0xF. If the result is larger than 0xF
-        // than the addition caused a carry from the lower nibble to the upper nibble.
         self.registers.f.half_carry = (self.registers.a & 0xF) + (value & 0xF) > 0xF;
         new_value
     }
@@ -545,9 +559,6 @@ impl Cpu {
         let (new_value, did_overflow) = self.registers.get_hl().overflowing_add(value);
         self.registers.f.subtract = false;
         self.registers.f.carry = did_overflow;
-        // Half Carry is set if adding the lower 12 bits of the value and register HL
-        // together result in a value bigger than 0xFFF. If the result is larger than 0xFFF,
-        // then the addition caused a carry from the lower 12 bits to the upper 4 bits.
         self.registers.f.half_carry = (self.registers.get_hl() & 0x07FF) + (value & 0x07FF) > 0x07FF;
         self.registers.set_hl(new_value);
         self.pc+1
@@ -557,11 +568,9 @@ impl Cpu {
         let signed_byte = self.read_next_byte() as u16;
         let value = self.sp;
         let (new_value, did_overflow) = self.sp.overflowing_add(signed_byte);
+
         self.registers.f.subtract = false;
         self.registers.f.carry = did_overflow;
-        // Half Carry is set if adding the lower 12 bits of the value and register HL
-        // together result in a value bigger than 0xFFF. If the result is larger than 0xFFF,
-        // then the addition caused a carry from the lower 12 bits to the upper 4 bits.
         self.registers.f.half_carry = (self.registers.get_hl() & 0xFFF) + (value & 0xFFF) > 0xFFF;
         self.sp=new_value;
         self.pc + 2
@@ -652,7 +661,6 @@ impl Cpu {
 
         // Check if there is a borrow from the lower nibble to the upper nibble.
         self.registers.f.half_carry = (self.registers.a & 0x0F) < (value & 0x0F) + carry_bit;
-
         self.registers.f.zero = with_carry == 0;
         self.registers.f.subtract = true;
         self.registers.f.carry = did_underflow || carry_underflow;
@@ -764,8 +772,6 @@ impl Cpu {
             ArithmeticTarget::AddressHL => self.bus.read_byte(self.registers.get_hl()),
             ArithmeticTarget::D8 => self.read_next_byte(),
             _ => panic!("value 14connu"),
-            //AddressHL -> gethl read address dans memory
-            //d8 readnextbyte
         };
 
         let (res, did_underflow) = self.registers.a.overflowing_sub(value);
@@ -774,7 +780,6 @@ impl Cpu {
         self.registers.f.zero = res==0;
         self.registers.f.subtract = true;
         self.registers.f.half_carry = (self.registers.a & 0x0F) < (value & 0x0F);
-        //println!("a: {},value : {}",self.registers.a,value);
         self.registers.f.carry = did_underflow;
         match target {
             ArithmeticTarget::D8 => self.pc+2,
@@ -1431,7 +1436,7 @@ impl Cpu {
 
         let msb = self.bus.read_byte(self.sp) as u16;
         self.sp = self.sp.wrapping_add(1);
-        //println!("Poped : {}",(msb << 8) | lsb);
+
         (msb << 8) | lsb
     }
 
@@ -1556,13 +1561,16 @@ impl Cpu {
         if !self.interrupt_master_enable {
             return 0;
         }
+
         //Set to false cause will take one now
         self.interrupt_master_enable = false;
         let interrupt_jump_addresses: [u16; 5] = [0x40, 0x48, 0x50, 0x58, 0x60];
+
         for (flag_number, interrupt_jump_address) in interrupt_jump_addresses.iter().enumerate() {
+
             let flag = 1 << (flag_number as u8);
+
             if interruption & flag > 0 {
-                //println!("interrutpion : {:b} interrutpion : {:b}",interruption,flag);
                 self.bus.interrupt_flags &= !flag;
                 let old_pc = self.pc;
                 self.push(old_pc);

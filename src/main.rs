@@ -4,7 +4,6 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::mpsc::TryRecvError;
 use std::time::SystemTime;
 
-use processor::registres::Registers;
 use glium::{Texture2d, texture, Surface};
 use input::Key;
 
@@ -16,7 +15,6 @@ mod cartridge;
 
 
 extern crate glium;
-use crate::processor::clock::Clock;
 use crate::input::KeyType;
 
 fn main() {
@@ -25,25 +23,13 @@ fn main() {
     if args.len() != 2 {
         panic!("No path for a GB rom after 'cargo run', {}",args.len());
     }
-    let reg=Registers ::new();
 
 
-    let (tx, rx) = mpsc::channel();
+    let (screen_sender, screen_receiver) = mpsc::channel();
     let (key_sender, key_receiver) = mpsc::channel();
     let (stop_sender, stop_receiver) = mpsc::channel();
 
-    let mut cpu = processor::cpu::Cpu {
-        registers: reg,
-        pc: 0x0100,
-        bus: mmu::memory::MemoryBus{ rom: cartridge::new(&args[1]), interrupt_flags: 0, interrupt_enabled: 0, wram: [0_u8; 0x2000],  hram: [0_u8; 0x80], gpu: ppu::gpu::Gpu::new(),screen_sender: tx, input: input::Input::new(key_receiver), clock: Clock::default() },
-        sp: 0xFFFE,
-        halt: false,
-        interrupt_master_enable: true,
-        ei:0,
-        di:0,
-        cycle:0,
-        stop: stop_receiver,
-    };
+    let mut cpu = processor::cpu::Cpu::new(&args[1], screen_sender, key_receiver, stop_receiver);
 
     thread::spawn(move || {
         let mut now = SystemTime::now();
@@ -67,7 +53,7 @@ fn main() {
         }
     });
 
-
+    //Screen setup for glium last version and the winit version associated
     let event_loop = winit::event_loop::EventLoopBuilder::new()
         .build();
 
@@ -88,7 +74,7 @@ fn main() {
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = winit::event_loop::ControlFlow::Poll;
-        match rx.try_recv() {
+        match screen_receiver.try_recv() {
             Ok(data) => {
                 //glium doesn't like u32 texture so translate to u8u8u8
                 let mut dataa= vec![0u8; (160 * 144 * 3) as usize];
@@ -98,11 +84,11 @@ fn main() {
                     dataa[i * 3 + 2] = ((data[i] >> 16) & 0xFF) as u8;
                 }
 
-                let image = glium::texture::RawImage2d {
+                let image = texture::RawImage2d {
                     data: Cow::Borrowed(&dataa),
                     width: 160,
                     height: 144,
-                    format: glium::texture::ClientFormat::U8U8U8,
+                    format: texture::ClientFormat::U8U8U8,
                 };
 
                 // Mettre à jour la texture avec les nouvelles données
@@ -135,10 +121,9 @@ fn main() {
                 if let Err(e) = target.finish() {
                     println!("ERROR: Failed to write to display: {}", e)
                 }
-            }
-            ,
-            Err(mpsc::TryRecvError::Empty) => (),
-            Err(mpsc::TryRecvError::Disconnected) =>{control_flow.set_exit();},
+            },
+            Err(TryRecvError::Empty) => (),
+            Err(TryRecvError::Disconnected) =>{control_flow.set_exit();},
 
         }
 

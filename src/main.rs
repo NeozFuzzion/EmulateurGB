@@ -1,3 +1,4 @@
+use std::env;
 use std::{thread, borrow::Cow};
 use std::sync::mpsc::{self, Sender};
 use std::sync::mpsc::TryRecvError;
@@ -19,17 +20,22 @@ use crate::processor::clock::Clock;
 use crate::input::KeyType;
 
 fn main() {
+
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 2 {
+        panic!("No path for a GB rom after 'cargo run', {}",args.len());
+    }
     let reg=Registers ::new();
 
 
-    let (tx     , rx) = mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     let (key_sender, key_receiver) = mpsc::channel();
     let (stop_sender, stop_receiver) = mpsc::channel();
 
     let mut cpu = processor::cpu::Cpu {
         registers: reg,
         pc: 0x0100,
-        bus: mmu::memory::MemoryBus{ rom: cartridge::new("/home/cytech/pkmn_red.gb"), interrupt_flags: 0, interrupt_enabled: 0, wram: [0_u8; 0x2000],  hram: [0_u8; 0x80], gpu: ppu::gpu::Gpu::new(),screen_sender: tx, input: input::Input::new(key_receiver), clock: Clock::default() },
+        bus: mmu::memory::MemoryBus{ rom: cartridge::new(&args[1]), interrupt_flags: 0, interrupt_enabled: 0, wram: [0_u8; 0x2000],  hram: [0_u8; 0x80], gpu: ppu::gpu::Gpu::new(),screen_sender: tx, input: input::Input::new(key_receiver), clock: Clock::default() },
         sp: 0xFFFE,
         halt: false,
         interrupt_master_enable: true,

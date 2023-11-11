@@ -39,6 +39,16 @@ The emulator uses a standard set of controls:
 - **S:** B button
 - **X:** Start button
 - **W:** Select button
+
+## Annex
+
+For more information about the Game Boy architecture and opcodes, refer to the following documentation:
+
+- [Game Boy Pandocs](https://gbdev.io/pandocs/)
+- [Game Boy Opcodes](https://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html)
+- [DMG-01 Technical Reference](https://rylev.github.io/DMG-01/public/book/)
+- [Game Boy CPU Manual (PDF)](http://marc.rawer.de/Gameboy/Docs/GBCPUman.pdf)
+
 ---
 
 Happy gaming! 🎮
